@@ -16,8 +16,14 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: smidhus-harness <command> [arguments]")
 		fmt.Println("Commands:")
-		fmt.Println("  init <path>   - Initializes the Harness environment in a project")
+		fmt.Println("  init [path]   - Initializes the Harness environment in a project (default: current dir)")
 		fmt.Println("  run           - Runs the state machine loop")
+		os.Exit(1)
+	}
+
+	// ── Pre-flight: verify opencode is installed ────────────────────────────
+	if err := setup.CheckOpenCode(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -25,10 +31,11 @@ func main() {
 
 	switch command {
 	case "init":
-		if len(os.Args) < 3 {
-			log.Fatal("Missing project path. Usage: smidhus-harness init /path/to/project")
+		// Default to current directory if no path is provided
+		targetPath := "."
+		if len(os.Args) >= 3 {
+			targetPath = os.Args[2]
 		}
-		targetPath := os.Args[2]
 		if err := setup.InitProject(targetPath); err != nil {
 			log.Fatalf("Error initializing: %v", err)
 		}
@@ -110,7 +117,7 @@ func main() {
 
 			fmt.Printf("🤖 Invoking [%s] using model [%s]...\n", targetAgent, agentCfg.Model)
 
-			err = executor.RunAgent(targetAgent, agentCfg, string(agentContent))
+			err = executor.RunAgent(targetAgent, agentCfg, string(agentContent), cfg.GlobalSettings.Timeout())
 			if err != nil {
 				log.Fatalf("❌ OpenCode failed to execute %s: %v", targetAgent, err)
 			}
