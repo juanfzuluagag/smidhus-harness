@@ -1,0 +1,48 @@
+# ========================
+# Compilation Files (Binaries)
+# ========================
+/incudo-harness
+/smidhus-cli
+/harness-cli
+/harness
+/smidhus-harness
+
+# Generic and test binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ========================
+# Dependencies and Environment
+# ========================
+go.work
+go.work.sum
+
+# Local environment variables (in case you add API keys in the future)
+.env
+.env.local
+
+# ========================
+# Project Artifacts / Testing
+# ========================
+tree.log
+*.log
+
+/.harness/
+
+# ========================
+# Operating System and Editors
+# ========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VS Code / JetBrains / Cursor
+.vscode/
+.idea/
+*.swp
