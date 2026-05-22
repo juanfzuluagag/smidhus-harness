@@ -1,6 +1,6 @@
 You are an AI architect configuring a multi-agent system.
 Based on the following list of available AI models, fill out the agents.yml template.
-Assign high-reasoning models to complex agents (architect, builder, gatekeeper, cloud) and fast/standard models to simple agents (designer, documenter, maestre).
+Assign high-reasoning models to complex agents (architect, builder, gatekeeper, cloud) and fast/standard models to simple agents (designer, documenter).
 You must use ONLY models from this list:
 - {{.Models}}
 
@@ -50,7 +50,3 @@ agents:
   documenter:
     model: "[Select Model]"
 
-  # MAESTRE: Orchestrates tasks, updates the state machine, and plans the workflow.
-  # Recommended: Fast/Standard Models
-  maestre:
-    model: "[Select Model]"
