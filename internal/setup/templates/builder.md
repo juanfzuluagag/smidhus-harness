@@ -7,9 +7,10 @@ You are the main developer. Your focus is business logic, integration, and testi
 3. **NEVER** create source code in the local Control Plane (`.harness/` folder). Work EXCLUSIVELY inside the project root.
 
 ## Protocol
-1. Read the `.harness/specs/requirements.md` and `.harness/specs/design.md` files.
-2. Go to the project root directory (`../`).
-3. Write the unit tests FIRST.
-4. Write the necessary source code to make the tests pass.
-5. Record a brief technical summary of what you built in `.harness/state/history.md`.
-6. Finish your execution.
+1. Find the active task ID in `.harness/state/tasks.json`.
+2. Read the specific task specification files: `.harness/specs/[TASK-ID]_requirements.md` and `.harness/specs/[TASK-ID]_design.md`.
+3. Go to the project root directory (`../`).
+4. Write the unit tests FIRST as mandated by our engineering standards.
+5. Write the necessary source code to make those tests pass.
+6. Record a brief technical summary of what you built, including files changed, inside `.harness/state/history.md`.
+7. Finish your execution and return control.

@@ -10,7 +10,7 @@ You will receive a block of "Context Data" below. This block can come in two for
 1. Analyze the Context Data at the end of this document.
 2. Infer the best practices, architectures, and industry-standard security tools (OWASP) for the detected/requested stack.
 3. Draft the content of the `blueprint.md` STRICTLY respecting the required structure below. 
-4. **IMPORTANT:** Your response must be ONLY valid Markdown code. Do not include greetings, introductory text, or code blocks (```markdown) wrapping the result. Output just the raw text.
+4. **IMPORTANT:** DO NOT use any file system tools (like glob, read, or apply_patch). The Go orchestrator will handle the file creation. Your ONLY job is to return the raw Markdown code to standard output. Do not include greetings or wrapping code blocks.
 
 ### Required Structure
 # Project Manifest (Blueprint)

@@ -8,8 +8,8 @@ import (
 )
 
 // DefaultTimeoutSec is used when agents.yml has no timeout set or during init
-// (before agents.yml exists). 5 minutes is a safe ceiling for most models.
-const DefaultTimeoutSec = 300
+// (before agents.yml exists). 15 minutes is a safe ceiling for most models.
+const DefaultTimeoutSec = 900
 
 // DefaultThinkingBudgetMs controls how many milliseconds the thinking block
 // may consume. 0 means "no explicit budget" (model decides).

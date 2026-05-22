@@ -10,6 +10,7 @@ type Task struct {
 	Title          string   `json:"title"`
 	Status         string   `json:"status"`
 	RequiredAgents []string `json:"required_agents,omitempty"`
+	AgentIndex     int      `json:"agent_index,omitempty"`
 }
 
 type ProjectState struct {
@@ -27,4 +28,12 @@ func LoadState(path string) (*ProjectState, error) {
 		return nil, err
 	}
 	return &state, nil
+}
+
+func SaveState(path string, state *ProjectState) error {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
