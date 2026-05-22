@@ -8,21 +8,24 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Noise / ignore lists
-// ---------------------------------------------------------------------------
-
+// noiseFiles are entries skipped when deciding whether a project is "blank".
+// Keeping this a simple map makes the lookup O(1) without a dependency.
 var noiseFiles = map[string]bool{
 	".git": true, ".DS_Store": true, ".gitignore": true,
 	".idea": true, ".vscode": true, "README.md": true, "readme.md": true,
 	".harness": true, "node_modules": true,
 }
 
+// ignoreForTree omits generated and vendored directories from the context
+// snapshot sent to the AI. They add noise without useful signal.
 var ignoreForTree = map[string]bool{
 	"node_modules": true, ".git": true, "bin": true, "dist": true,
 	"build": true, ".harness": true, "__pycache__": true, ".next": true,
 	"vendor": true, "target": true,
 }
 
+// manifestFiles are the dependency descriptors we extract to give the AI
+// a concrete understanding of the project's dependency graph.
 var manifestFiles = []string{
 	"package.json", "go.mod", "pom.xml", "Cargo.toml",
 	"pyproject.toml", "requirements.txt", "composer.json",
@@ -31,10 +34,8 @@ var manifestFiles = []string{
 const maxManifestBytes = 4096
 
 // ---------------------------------------------------------------------------
-// Blank-project detection
-// ---------------------------------------------------------------------------
-
-// isBlankProject returns true if targetPath contains only noise files/dirs.
+// isBlankProject returns true when targetPath contains only noise entries.
+// Used to decide between the questionnaire flow and AI-scan flow.
 func isBlankProject(targetPath string) (bool, error) {
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
@@ -49,9 +50,8 @@ func isBlankProject(targetPath string) (bool, error) {
 }
 
 // ---------------------------------------------------------------------------
-// Directory tree + manifest collection
-// ---------------------------------------------------------------------------
-
+// buildTree renders a text representation of the directory hierarchy.
+// Depth is capped to avoid sending megabytes of paths to the AI context.
 func buildTree(root string, depth, maxDepth int) string {
 	if depth > maxDepth {
 		return ""
@@ -68,10 +68,10 @@ func buildTree(root string, depth, maxDepth int) string {
 			continue
 		}
 		if e.IsDir() {
-			sb.WriteString(fmt.Sprintf("%s📁 %s/\n", indent, e.Name()))
+			sb.WriteString(fmt.Sprintf("%s|-- %s/\n", indent, e.Name()))
 			sb.WriteString(buildTree(filepath.Join(root, e.Name()), depth+1, maxDepth))
 		} else {
-			sb.WriteString(fmt.Sprintf("%s📄 %s\n", indent, e.Name()))
+			sb.WriteString(fmt.Sprintf("%s- %s\n", indent, e.Name()))
 		}
 	}
 	return sb.String()
@@ -93,8 +93,9 @@ func collectManifests(targetPath string) string {
 	return sb.String()
 }
 
-// collectRepoXray returns a combined directory tree + key manifest snapshot
-// of targetPath, suitable for passing as context to the AI.
+// collectRepoXray returns a combined directory tree and key manifest snapshot
+// of targetPath. This gives the AI enough structural context to write accurate
+// specs without scanning the entire repository itself.
 func collectRepoXray(targetPath string) string {
 	tree := buildTree(targetPath, 0, 3)
 	manifests := collectManifests(targetPath)

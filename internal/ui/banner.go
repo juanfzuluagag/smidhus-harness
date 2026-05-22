@@ -2,35 +2,34 @@ package ui
 
 import (
 	"fmt"
-
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Coco Clean Palette
+// Dark Forge Palette
 const (
-	Primary = "#5E35B1" // Deep Purple
-	Text    = "#4B5563" // Clean Slate
-	Success = "#10B981" // Emerald Green
-	Error   = "#DC2626" // Crimson Red
-	Warning = "#F59E0B" // Amber
-	Muted   = "#9CA3AF" // Cool Gray
+	Primary = "#FF5A00" // Ember Orange
+	Text    = "#E5E7EB" // Steel Light
+	Success = "#059669" // Tempered Green
+	Error   = "#DC2626" // Molten Red
+	Warning = "#D97706" // Amber
+	Muted   = "#6B7280" // Ash Gray
 )
 
 var (
 	// Base styles
 	BaseText    = lipgloss.NewStyle().Foreground(lipgloss.Color(Text))
 	PrimaryText = lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Bold(true)
-	SuccessText = lipgloss.NewStyle().Foreground(lipgloss.Color(Success))
-	ErrorText   = lipgloss.NewStyle().Foreground(lipgloss.Color(Error))
-	WarningText = lipgloss.NewStyle().Foreground(lipgloss.Color(Warning))
+	SuccessText = lipgloss.NewStyle().Foreground(lipgloss.Color(Success)).Bold(true)
+	ErrorText   = lipgloss.NewStyle().Foreground(lipgloss.Color(Error)).Bold(true)
+	WarningText = lipgloss.NewStyle().Foreground(lipgloss.Color(Warning)).Bold(true)
 	MutedText   = lipgloss.NewStyle().Foreground(lipgloss.Color(Muted))
 
-	// Key-Value styles
-	KeyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Width(10)
+	// Key-Value layout uses fixed-width keys for optical alignment in output logs.
+	KeyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Width(12).Align(lipgloss.Right)
 	ValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Bold(true)
 )
 
-// PrintBanner prints the main application banner in a clean Slant ASCII font
+// PrintBanner prints the main application banner
 func PrintBanner() {
 	banner := `
    _____ __  __ ________  __  __  _______    __  _____    ____  _   ________________ 
@@ -42,39 +41,40 @@ func PrintBanner() {
 	fmt.Println(PrimaryText.Render(banner))
 }
 
-// PrintSuccess prints a success message with an icon
+// PrintSuccess prints a success message using industrial brackets
 func PrintSuccess(msg string) {
-	fmt.Println(SuccessText.Render("✅ " + msg))
+	fmt.Println(SuccessText.Render("[+] ") + BaseText.Render(msg))
 }
 
-// PrintError prints an error message with an icon
+// PrintError prints an error message using industrial brackets
 func PrintError(msg string) {
-	fmt.Println(ErrorText.Render("❌ " + msg))
+	fmt.Println(ErrorText.Render("[x] ") + BaseText.Render(msg))
 }
 
-// PrintWarning prints a warning message with an icon
+// PrintWarning prints a warning message using industrial brackets
 func PrintWarning(msg string) {
-	fmt.Println(WarningText.Render("⚠️  " + msg))
+	fmt.Println(WarningText.Render("[!] ") + BaseText.Render(msg))
 }
 
-// PrintInfo prints a neutral info message with an icon
+// PrintInfo prints a neutral info message using industrial brackets
 func PrintInfo(msg string) {
-	fmt.Println(PrimaryText.Render("ℹ️  " + msg))
+	fmt.Println(PrimaryText.Render(" >  ") + BaseText.Render(msg))
 }
 
-// PrintKeyValue renders a clean Key-Value row
+// PrintKeyValue renders a clean Key-Value row with a rigid divider
 func PrintKeyValue(key, value string) {
-	fmt.Println(lipgloss.JoinHorizontal(lipgloss.Left, KeyStyle.Render(key), ValueStyle.Render(value)))
+	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Render(" :: ")
+	fmt.Println(lipgloss.JoinHorizontal(lipgloss.Left, KeyStyle.Render(key), divider, ValueStyle.Render(value)))
 }
 
-// PrintStep renders a minimalist progress step (e.g., Task      │ Doing something)
+// PrintStep renders a minimalist progress step
 func PrintStep(step, detail string) {
-	stepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Width(10).Bold(true)
-	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Render(" │ ")
+	stepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Width(12).Align(lipgloss.Right).Bold(true)
+	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Render(" █ ")
 	fmt.Println(lipgloss.JoinHorizontal(lipgloss.Left, stepStyle.Render(step), divider, BaseText.Render(detail)))
 }
 
-// RenderMessage renders a simple message in clean slate text
+// RenderMessage renders a simple message in steel text
 func RenderMessage(msg string) string {
 	return BaseText.Render(msg)
 }

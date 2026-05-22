@@ -7,11 +7,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// opencode JSON event types
-// ---------------------------------------------------------------------------
-
-// opencodeEvent is a minimal representation of a JSON event emitted by
-// `opencode run --format json`. We only decode the fields we care about.
+// opencodeEvent is a minimal JSON event emitted by `opencode run --format json`.
+// We decode only the fields we act on to stay resilient against schema changes.
 type opencodeEvent struct {
 	Type string `json:"type"`
 	Part struct {
@@ -31,9 +28,8 @@ type opencodeEvent struct {
 }
 
 // ---------------------------------------------------------------------------
-// Error parsing helpers
-// ---------------------------------------------------------------------------
-
+// parsedErrorInner extracts the structured fields from the deeply nested
+// error objects opencode embeds in its log lines.
 type parsedErrorInner struct {
 	Name       string `json:"name"`
 	StatusCode int    `json:"statusCode"`
@@ -47,13 +43,16 @@ type parsedErrorInner struct {
 	} `json:"data"`
 }
 
+// parsedErrorLog handles two layouts: a top-level error field and a flat
+// structure where the error fields are at the root of the JSON object.
 type parsedErrorLog struct {
 	Error            *parsedErrorInner `json:"error"`
 	parsedErrorInner                   // embedded
 }
 
-// formatErrorLine formats very long error lines to extract and highlight
-// the key details, stripping massive instruction/prompt payloads.
+// formatErrorLine trims massive log lines (which contain full prompts) down
+// to just the error metadata. Long lines without an error object are truncated
+// at 500 chars to keep the terminal output readable.
 func formatErrorLine(line string) string {
 	idx := strings.Index(line, "error={")
 	if idx == -1 {
@@ -92,8 +91,9 @@ func formatErrorLine(line string) string {
 	return line
 }
 
-// classifyError analyzes a log line (usually from stderr under --print-logs)
-// and returns the classified error message and true if it is a fatal API error.
+// classifyError detects fatal API errors from a single stderr log line and
+// returns a human-readable message. Using ToLower once avoids repeated
+// case-insensitive comparisons on potentially large strings.
 func classifyError(line string) (string, bool) {
 	lower := strings.ToLower(line)
 

@@ -14,10 +14,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// UI Theme
-// ---------------------------------------------------------------------------
-
-// getTheme returns a customized huh theme matching the Coco Clean aesthetic.
+// getTheme returns a huh theme tuned to the Dark Forge palette.
+// Centralizing this avoids style drift across the multiple form calls.
 func getTheme() *huh.Theme {
 	t := huh.ThemeCharm()
 	t.Focused.Title = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Primary)).Bold(true)
@@ -29,12 +27,8 @@ func getTheme() *huh.Theme {
 	return t
 }
 
-// ---------------------------------------------------------------------------
-// Phase 0: Model fetching & selection
-// ---------------------------------------------------------------------------
-
-// fetchAvailableModels runs `opencode models` silently and returns a
-// provider → model-list map.
+// fetchAvailableModels runs `opencode models` and groups the results by provider.
+// Parsing is lenient: unknown formats fall back to the "other" bucket.
 func fetchAvailableModels() (map[string][]string, error) {
 	out, err := exec.Command("opencode", "models").Output()
 	if err != nil {
@@ -71,7 +65,9 @@ func fetchAvailableModels() (map[string][]string, error) {
 	return modelMap, nil
 }
 
-// selectModel presents a 2-step sequential flow: provider → model.
+// selectModel presents a two-step provider-then-model picker.
+// Splitting the selection reduces the list length at each step, which matters
+// when providers expose dozens of models.
 func selectModel(modelMap map[string][]string) (string, error) {
 	var providers []string
 	for p := range modelMap {
@@ -111,7 +107,8 @@ func selectModel(modelMap map[string][]string) (string, error) {
 	return selectedModel, nil
 }
 
-// askThinkingBudget presents a flow to select the global thinking budget.
+// askThinkingBudget lets the user control how much reasoning budget the model
+// spends. Zero means the model decides, which is the safest default.
 func askThinkingBudget() (int, error) {
 	var budget int
 	budgetOpts := []huh.Option[int]{
@@ -131,8 +128,8 @@ func askThinkingBudget() (int, error) {
 	return budget, err
 }
 
-// askBlueprintMode asks whether to use AI or manual mode for blueprint
-// generation.
+// askBlueprintMode chooses between AI-expanded output and a verbatim
+// markdown scaffold. Manual mode is useful when token budget is tight.
 func askBlueprintMode() (bool, error) {
 	var useAI bool
 	err := huh.NewConfirm().
@@ -147,9 +144,8 @@ func askBlueprintMode() (bool, error) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1A: Questionnaire (blank project or manual choice)
-// ---------------------------------------------------------------------------
-
+// runQuestionnaire collects the minimal project metadata needed for blueprint
+// generation when the project directory is blank (no source files to scan).
 func runQuestionnaire(defaultName string) (string, error) {
 	var name, stack, depMgr, arch, security, uiux string
 

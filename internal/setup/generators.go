@@ -21,12 +21,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// opencode runner
-// ---------------------------------------------------------------------------
-
 // runOpencodeWithFilter executes `opencode run` with structured JSON output,
 // streaming thinking blocks and tool calls to the terminal in real time.
 // It implements fail-fast on API/quota/rate-limit errors via the stderr watchdog.
+// Using a cancellable context (not a timeout) means the watchdog is the sole
+// authority for inactivity termination, keeping the logic in one place.
 func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -73,6 +72,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		stderrMu          sync.Mutex
 	)
 
+	// killProcess is idempotent: first caller wins, subsequent calls are no-ops.
 	killProcess := func(reason string) {
 		mu.Lock()
 		if killedReason == "" {
@@ -92,7 +92,9 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 	var stdoutBuf bytes.Buffer
 	var wg sync.WaitGroup
 
-	// Monitor stdout: stream thinking/tool events; accumulate raw output.
+	// Stream stdout events: thinking blocks and tool calls are rendered in real
+	// time so the user can follow along. Raw output is accumulated for fallback
+	// extraction if the AI writes its response to stdout instead of a file.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -170,7 +172,9 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		}
 	}()
 
-	// Monitor stderr concurrently for fail-fast logs
+	// Monitor stderr for fail-fast error logs emitted by --print-logs.
+	// A dedicated goroutine avoids blocking stdout consumption, which would
+	// deadlock the process if the pipe buffers fill up.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -201,7 +205,9 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		}
 	}()
 
-	// Watchdog goroutine: kill the process if silent for more than 2 minutes
+	// Watchdog: cancel the process if the model goes silent for 2 minutes.
+	// Two minutes is chosen to be long enough for slow reasoning models but
+	// short enough to catch a hung or rate-limited connection.
 	watchdogDone := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
@@ -222,7 +228,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 
 	runErr := cmd.Wait()
 	close(watchdogDone)
-	wg.Wait() // drain both pipe goroutines before reading results
+	wg.Wait() // drain both pipe goroutines before inspecting results
 
 	mu.Lock()
 	reason := killedReason
@@ -275,9 +281,9 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: Blueprint generation
-// ---------------------------------------------------------------------------
-
+// generateBlueprintAI sends the bootstrapper prompt plus collected context to
+// opencode. The AI writes directly to blueprint.md; stdout is a fallback for
+// models that print output instead of saving files.
 func generateBlueprintAI(model, contextData, harnessDir string) error {
 	bootstrapperRaw, err := TemplatesFS.ReadFile("templates/bootstrapper.md")
 	if err != nil {
@@ -332,6 +338,8 @@ func generateBlueprintAI(model, contextData, harnessDir string) error {
 	return nil
 }
 
+// generateBlueprintManual produces a simple markdown scaffold from the
+// questionnaire answers when the user opts out of AI mode.
 func generateBlueprintManual(contextData, harnessDir string) error {
 	values := map[string]string{}
 	for _, line := range strings.Split(contextData, "\n") {
@@ -384,21 +392,21 @@ func orNA(s string) string {
 }
 
 // ---------------------------------------------------------------------------
-// Scaffold helpers
-// ---------------------------------------------------------------------------
-
-// agentsPromptData holds the values interpolated into prompt_agents.txt.
+// agentsPromptData holds the template variables interpolated into prompt_agents.txt.
 type agentsPromptData struct {
 	Models         string
 	AgentsYAMLPath string
 	Budget         int
 }
 
+// generateAgentsAI asks the AI to fill in the agents.yml template by choosing
+// appropriate models from the available list. Using text/template keeps the
+// long prompt out of the Go source and makes it independently editable.
 func generateAgentsAI(model string, budget int, modelMap map[string][]string, harnessDir string) error {
 	agentsYAMLPath := filepath.Join(harnessDir, "agents.yml")
 	timeout := time.Duration(config.DefaultTimeoutSec) * time.Second
 
-	// Flatten model map to a simple list for the prompt
+	// Flatten the provider->models map into a single list for the prompt.
 	var allModels []string
 	for _, models := range modelMap {
 		allModels = append(allModels, models...)

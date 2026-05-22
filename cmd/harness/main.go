@@ -53,13 +53,15 @@ func main() {
 }
 
 // runLoop is the deterministic state machine orchestrator.
-// It owns all state transitions and persists them to tasks.json after each step.
+// State transitions are owned exclusively by Go — never delegated to the AI.
+// Both tasks.json and agents.yml are reloaded each iteration so the user can
+// edit them while the harness is paused without restarting.
 func runLoop() {
 	fmt.Print("\033[H\033[2J")
 	ui.PrintBanner()
 
 	for {
-		// ── 1. Re-read state and config from disk at the top of every iteration ──
+		// Reload from disk every tick so mid-run edits are picked up immediately.
 		projectState, err := state.LoadState(tasksPath)
 		if err != nil {
 			ui.PrintError(fmt.Sprintf("Error reading tasks.json: %v", err))
@@ -72,7 +74,7 @@ func runLoop() {
 			os.Exit(1)
 		}
 
-		// ── 2. Find the first non-done task ───────────────────────────────────
+		// Scan sequentially: the harness works one task at a time.
 		var activeTask *state.Task
 		for i := range projectState.Tasks {
 			if projectState.Tasks[i].Status != "done" {
@@ -82,7 +84,7 @@ func runLoop() {
 		}
 
 		if activeTask == nil {
-			ui.PrintSuccess("All tasks completed. The harness has finished its work. 🎉")
+			ui.PrintSuccess("All tasks completed. The forge is done.")
 			break
 		}
 
@@ -94,23 +96,23 @@ func runLoop() {
 		ui.PrintKeyValue("Task", title)
 		ui.PrintKeyValue("Status", activeTask.Status)
 
-		// ── 3. Determine which agent to run based on current status ───────────
+		// Agent selection is status-driven to keep the orchestration deterministic.
 		var targetAgent string
 
 		switch activeTask.Status {
 
 		case "pending":
-			// Architect analyses requirements and produces specs.
+			// Architect is always first: it produces the spec files the other agents depend on.
 			targetAgent = "architect"
 
 		case "spec_ready":
-			// Human-in-the-loop: print the pause box once, then poll until approved.
+			// Human-in-the-loop gate. Poll tasks.json until the user advances the status.
 			pauseBox := lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color(ui.Primary)).
 				Padding(1, 3).
 				Render(
-					ui.PrimaryText.Render("⏸  Paused — Architect finished the specs") + "\n\n" +
+					ui.PrimaryText.Render("[!] Paused -- Architect finished the specs") + "\n\n" +
 						ui.BaseText.Render("1. Review the spec files in ") + ui.PrimaryText.Render(".harness/specs/") + "\n" +
 						ui.BaseText.Render("2. Edit them if needed\n") +
 						ui.BaseText.Render("3. Change task status to ") + ui.PrimaryText.Render(`"approved"`) +
@@ -144,14 +146,14 @@ func runLoop() {
 			continue
 
 		case "approved", "in_progress":
-			// Ensure there's at least a default agent list.
+			// Default to builder when the spec doesn't name specific agents.
 			if len(activeTask.RequiredAgents) == 0 {
 				activeTask.RequiredAgents = []string{"builder"}
 			}
 
-			// Check if all builders are done → transition to reviewing.
+			// All required agents have run — advance to the review gate.
 			if activeTask.AgentIndex >= len(activeTask.RequiredAgents) {
-				ui.PrintKeyValue("Progress", "All builders finished → moving to reviewing")
+				ui.PrintKeyValue("Progress", "All builders finished -> moving to reviewing")
 				activeTask.Status = "reviewing"
 				activeTask.AgentIndex = 0
 				if err := state.SaveState(tasksPath, projectState); err != nil {
@@ -174,7 +176,7 @@ func runLoop() {
 			os.Exit(1)
 		}
 
-		// ── 4. Resolve agent prompt (local file takes precedence over embedded) ──
+		// Local agent files override the embedded defaults, allowing per-project customization.
 		agentContent, err := resolveAgentContent(targetAgent)
 		if err != nil {
 			ui.PrintError(err.Error())
@@ -201,49 +203,44 @@ func runLoop() {
 		)
 
 		if runErr != nil {
-			// Print a styled error panel with the specific message from opencode.
+			// State is intentionally NOT advanced on failure so the user can fix the
+			// underlying issue (e.g. swap models, edit the prompt) and press Enter to retry.
 			errBox := lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color(ui.Error)).
 				Padding(1, 3).
 				Render(
-					ui.ErrorText.Render("✗  Agent failed: "+targetAgent) + "\n\n" +
+					ui.ErrorText.Render("[x] Agent failed: "+targetAgent) + "\n\n" +
 						ui.BaseText.Render(runErr.Error()) + "\n\n" +
 						ui.MutedText.Render("State was NOT advanced. Press Enter to retry, or Ctrl+C to abort."),
 				)
 			fmt.Println("\n" + errBox)
 
-			// Block waiting for the user to press Enter to retry.
 			fmt.Scanln()
-			continue // retry the same agent without changing state
+			continue
 		}
 
-		ui.PrintKeyValue("Result", ui.SuccessText.Render(fmt.Sprintf("✓ Done (%s)", elapsed.Round(time.Millisecond))))
+		ui.PrintKeyValue("Result", ui.SuccessText.Render(fmt.Sprintf("[+] Done (%s)", elapsed.Round(time.Millisecond))))
 
-		// ── 6. Go transitions the state — deterministically, after success ─────
+		// State transitions are intentionally centralized here, not inside agents.
 		switch activeTask.Status {
 
 		case "pending":
-			// Architect succeeded → wait for human review of specs.
+			// Specs are now ready for human review before any code is written.
 			activeTask.Status = "spec_ready"
 
 		case "approved", "in_progress":
-			// Mark as in_progress so it's clear the cycle has started.
 			activeTask.Status = "in_progress"
-			// Advance the builder index.
 			activeTask.AgentIndex++
-			// If all builders done, transition will happen at top of next loop.
 
 		case "reviewing":
-			// Gatekeeper passed → generate docs.
 			activeTask.Status = "documenting"
 
 		case "documenting":
-			// Documenter finished → mark as done.
 			activeTask.Status = "done"
 		}
 
-		// ── 7. Persist the updated state immediately ───────────────────────────
+		// Persist immediately so a crash never rolls back a completed step.
 		if err := state.SaveState(tasksPath, projectState); err != nil {
 			ui.PrintError(fmt.Sprintf("Error saving state: %v", err))
 			os.Exit(1)
@@ -254,8 +251,8 @@ func runLoop() {
 	}
 }
 
-// resolveAgentContent loads the agent prompt from .harness/agents/<name>.md if it
-// exists, otherwise falls back to the embedded template shipped with the binary.
+// resolveAgentContent gives users a local override mechanism: drop a custom
+// <name>.md under .harness/agents/ and it takes precedence over the embedded default.
 func resolveAgentContent(agentName string) ([]byte, error) {
 	localPath := filepath.Join(".harness", "agents", agentName+".md")
 	if _, err := os.Stat(localPath); err == nil {

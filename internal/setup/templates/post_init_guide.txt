@@ -1,6 +1,6 @@
-We have successfully initialized the Smidhus Harness! 🚀
+We have successfully initialized the Smidhus Harness.
 
-Here is your post-init quickstart guide:
+--- Post-Init Quickstart Guide ---
 
 1. Review the Blueprint (.harness/blueprint.md)
    Read it to ensure the technology stack and rules are correct, or manually add any necessary technical constraints.
@@ -15,6 +15,6 @@ Here is your post-init quickstart guide:
    This is the brain of the workflow. Write your tasks here. The orchestrator will pick the first "pending" task and start the Spec-Driven development cycle.
 
 4. Visual Mockups for the Designer
-   If a task requires UI implementation, drop an image in .harness/specs/ and name it exactly like your task ID (e.g., T003_mockup.jpg). The Designer agent will "see" it and code it!
+   If a task requires UI implementation, drop an image in .harness/specs/ and name it exactly like your task ID (e.g., T003_mockup.jpg). The Designer agent will see it and code it.
 
-Next step: Run 'smidhus-harness run' to start forging!
+Next step: run 'smidhus-harness run' to start forging.

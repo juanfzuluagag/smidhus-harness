@@ -19,7 +19,8 @@ var TemplatesFS embed.FS
 // Dependency Check
 // ---------------------------------------------------------------------------
 
-// CheckOpenCode verifies that the `opencode` binary is available in $PATH.
+// CheckOpenCode verifies that the `opencode` binary is available in PATH.
+// We fail immediately rather than deferring to exec so the error is clear.
 func CheckOpenCode() error {
 	_, err := exec.LookPath("opencode")
 	if err != nil {
@@ -35,12 +36,13 @@ func CheckOpenCode() error {
 
 // InitProject runs the full interactive harness initialization flow for
 // targetPath, generating .harness/blueprint.md, agents.yml, and tasks.json.
+// The function is intentionally sequential — each phase feeds the next.
 func InitProject(targetPath string) error {
 	ui.PrintBanner()
 
 	harnessDir := filepath.Join(targetPath, ".harness")
 
-	// ── Create folder skeleton ──────────────────────────────────────────────
+	// Create folder skeleton for state and spec artifacts.
 	for _, d := range []string{
 		filepath.Join(harnessDir, "state"),
 		filepath.Join(harnessDir, "specs"),
@@ -50,7 +52,7 @@ func InitProject(targetPath string) error {
 		}
 	}
 
-	// ── Create specs templates ──────────────────────────────────────────────
+	// Drop placeholder files so the specs/ directory is self-documenting.
 	readmeContent := `# Project Specifications (Specs)
 
 Welcome to the specifications directory. The Architect agent will generate design files here. You can also manually add .md files to request new features.`
@@ -68,7 +70,8 @@ Welcome to the specifications directory. The Architect agent will generate desig
 - **Files to Create/Modify**: ...`
 	os.WriteFile(filepath.Join(harnessDir, "specs", "template_spec.md"), []byte(templateContent), 0644)
 
-	// ── Phase 0: Model selection ────────────────────────────────────────────
+	// Fetch models before showing any prompts to avoid a mid-questionnaire
+	// failure leaving the user with no fallback option.
 	modelMap, err := fetchAvailableModels()
 	if err != nil || len(modelMap) == 0 {
 		ui.PrintError("Could not retrieve model list. Falling back to default model.")
@@ -92,7 +95,8 @@ Welcome to the specifications directory. The Architect agent will generate desig
 		return fmt.Errorf("mode selection failed: %w", err)
 	}
 
-	// ── Phase 1: Context collection ─────────────────────────────────────────
+	// Collect context: blank projects go straight to the questionnaire;
+	// existing codebases can choose between AI scan and manual input.
 	blank, err := isBlankProject(targetPath)
 	if err != nil {
 		return fmt.Errorf("could not scan project directory: %w", err)
@@ -132,7 +136,8 @@ Welcome to the specifications directory. The Architect agent will generate desig
 		}
 	}
 
-	// ── Phase 2: Blueprint generation ──────────────────────────────────────
+	// Generate blueprint: AI mode sends collected context to opencode;
+	// manual mode formats it into a plain markdown scaffold.
 	if aiMode {
 		if err := generateBlueprintAI(selectedModel, contextData, harnessDir); err != nil {
 			return fmt.Errorf("AI blueprint generation failed: %w", err)
@@ -143,7 +148,7 @@ Welcome to the specifications directory. The Architect agent will generate desig
 		}
 	}
 
-	// ── Final Configuration (Agents YAML + Tasks) ────────────────────────
+	// Wire up agents.yml and seed the first task.
 	if err := generateAgentsAI(selectedModel, budget, modelMap, harnessDir); err != nil {
 		return fmt.Errorf("could not generate agents.yml: %w", err)
 	}
