@@ -446,7 +446,7 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 			sb.WriteString("\n  • Increasing 'timeout' in agents.yml")
 			sb.WriteString("\n  • Switching to a faster model for this agent")
 		}
-		return elapsed, fmt.Errorf(sb.String())
+		return elapsed, fmt.Errorf("%s", sb.String())
 	}
 
 	// ── Exit with error ────────────────────────────────────────────────────────
