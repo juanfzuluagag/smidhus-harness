@@ -38,9 +38,10 @@ func (g GlobalSettings) Timeout() time.Duration {
 
 // AgentConfig holds per-agent settings.
 type AgentConfig struct {
-	Model          string  `yaml:"model"`
-	Temperature    float32 `yaml:"temperature"`
-	SpecificSkills string  `yaml:"specific_skills,omitempty"`
+	Model          string   `yaml:"model"`
+	Temperature    float32  `yaml:"temperature"`
+	SpecificSkills string   `yaml:"specific_skills,omitempty"`
+	Skills         []string `yaml:"skills,omitempty"`
 }
 
 // HarnessConfig is the top-level structure parsed from .harness/agents.yml.

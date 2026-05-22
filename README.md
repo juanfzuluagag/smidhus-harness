@@ -165,6 +165,34 @@ When the Designer agent runs on task `T003`, it will automatically detect the mo
 
 ---
 
+## AI Skills & MCP Plugins
+
+Smidhus Harness supports dynamic skill provisioning for agents using a strictly declarative, auto-equip architecture. Developers do not need to manually run plugin installation commands on their local environments; instead, they declare the dependencies inside the `.harness/agents.yml` file.
+
+To equip an agent with specific skills or Model Context Protocol (MCP) servers, add the `skills` list configuration under that agent:
+
+```yaml
+global_settings:
+  timeout: 900
+  thinking_budget_ms: 2000
+
+agents:
+  builder:
+    model: "nvidia/qwen3-next-80b-a3b-thinking"
+  cloud:
+    model: "google/gemini-2.5-flash"
+    skills:
+      - "aws/cli-manager"
+      - "github/repo-manager"
+```
+
+Before invoking the agent, the harness automatically resolves and installs the declared skills locally using OpenCode's native installation mechanism (`opencode plugin <skill>`). If any skill fails to install, execution stops immediately to avoid run errors.
+
+> [!NOTE]
+> **MCP & Skill Configuration:** Connection strings, API tokens, or server-specific parameters (e.g., PostgreSQL credentials) are configured directly in your local system shell (as environment variables) or via OpenCode's configuration. Smidhus Harness does not store or process credentials; it simply inherits your active shell session's environment when invoking the tools. Please refer to the specific MCP/skill documentation for its configuration requirements.
+
+---
+
 ## License
 
 This project is free and open-source software distributed under the **GNU General Public License v3.0 (GPLv3)**. 

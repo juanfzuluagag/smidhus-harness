@@ -15,6 +15,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"harness-cli/internal/config"
+	"harness-cli/internal/skills"
 	"harness-cli/internal/ui"
 )
 
@@ -181,6 +182,13 @@ func classifyError(line string) (string, bool) {
 // in real time, implementing a fail-fast mechanism on API/Quota/Rate Limit errors.
 // Returns elapsed time on success.
 func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, timeout time.Duration) (time.Duration, error) {
+	if len(cfg.Skills) > 0 {
+		ui.PrintInfo(fmt.Sprintf("[%s] Equipping skills: %v", agentName, cfg.Skills))
+		if err := skills.AutoEquip(cfg.Skills); err != nil {
+			return 0, err
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
