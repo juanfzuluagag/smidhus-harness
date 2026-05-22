@@ -13,4 +13,4 @@ You are a strict auditor. You ensure the target code meets the specification, te
    
    - If it FAILS: Write a clear summary of the errors and broken criteria inside `.harness/state/history.md` for the Builder to fix. Intentionally fail your execution with a non-zero exit code.
    
-   - If EVERYTHING IS GREEN: Do NOT delete the files. Create the archive directory `.harness/specs/archive/` if it doesn't exist, and **move** the current task files (`[TASK-ID]_requirements.md` and `[TASK-ID]_design.md`) into it to keep the active workspace clean while preserving engineering history. Finish successfully with an exit code of 0.
+   - If EVERYTHING IS GREEN: Do NOT delete the files. Create the archive directory `.harness/specs/archive/` if it doesn't exist, and **move all files related to the current task** (matching `[TASK-ID]_*`, which includes `requirements.md`, `design.md`, and any `mockup.*` images) from `.harness/specs/` into the archive directory to keep the active workspace clean while preserving engineering history. Finish successfully with an exit code of 0.
