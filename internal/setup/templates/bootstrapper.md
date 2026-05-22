@@ -28,6 +28,7 @@ You will receive a block of "Context Data" below. This block can come in two for
 
 ## 4. Security & Best Practices
 - [Injection prevention strategies, secrets management, sanitization, CSP, etc.]
+- **Code Style:** ALL comments must be in idiomatic English. NEVER use ASCII art or box-drawing characters (like `───`). Write comments to explain the *WHY*, not the *WHAT*. Keep them concise and human-like.
 
 ## 5. Testing Strategy
 - [Frameworks to use and testing approach (Unit, E2E)]

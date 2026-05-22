@@ -1,0 +1,56 @@
+You are an AI architect configuring a multi-agent system.
+Based on the following list of available AI models, fill out the agents.yml template.
+Assign high-reasoning models to complex agents (architect, builder, gatekeeper, cloud) and fast/standard models to simple agents (designer, documenter, maestre).
+You must use ONLY models from this list:
+- {{.Models}}
+
+IMPORTANT: Write your output DIRECTLY to the file '{{.AgentsYAMLPath}}' using the exact structure below. Do not print anything else.
+
+# =======================================================================
+# SMIDHUS HARNESS - AGENTS CONFIGURATION
+# =======================================================================
+# You can edit this file at any time to change the models assigned to
+# each agent. If an agent is struggling with a complex task, try upgrading
+# its model to one with higher reasoning capabilities.
+
+global_settings:
+  # Maximum seconds to wait for any single OpenCode invocation.
+  timeout: 900
+  # Thinking budget in milliseconds (0 = no explicit limit, model decides).
+  thinking_budget_ms: {{.Budget}}
+
+agents:
+  # ARCHITECT: Analyzes requirements, designs the system, and dictates technical rules.
+  # Recommended: High Reasoning Models (e.g., nvidia/qwen3-next-80b-a3b-thinking, deepseek-v4-pro)
+  architect:
+    model: "[Select Model]"
+
+  # BUILDER: Writes the core business logic, components, and implements the specs.
+  # Recommended: High Reasoning Models (e.g., nvidia/qwen3-next-80b-a3b-thinking, deepseek-v4-pro)
+  builder:
+    model: "[Select Model]"
+
+  # GATEKEEPER: Reviews code, enforces security, and ensures blueprint compliance.
+  # Recommended: High Reasoning Models
+  gatekeeper:
+    model: "[Select Model]"
+
+  # CLOUD: Manages IaC, deployment scripts, and infrastructure configuration.
+  # Recommended: High Reasoning Models
+  cloud:
+    model: "[Select Model]"
+
+  # DESIGNER: Handles UI/UX components, CSS, and aesthetic implementations.
+  # Recommended: Fast/Standard Models (e.g., google/gemini-2.5-flash, qwen3.6-plus)
+  designer:
+    model: "[Select Model]"
+
+  # DOCUMENTER: Generates READMEs, inline comments, and API documentation.
+  # Recommended: Fast/Standard Models
+  documenter:
+    model: "[Select Model]"
+
+  # MAESTRE: Orchestrates tasks, updates the state machine, and plans the workflow.
+  # Recommended: Fast/Standard Models
+  maestre:
+    model: "[Select Model]"
