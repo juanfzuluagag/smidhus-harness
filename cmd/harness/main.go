@@ -39,7 +39,13 @@ func main() {
 		if len(os.Args) >= 3 {
 			targetPath = os.Args[2]
 		}
-		if err := setup.InitProject(targetPath); err != nil {
+		runCmdCreator := func(p *tea.Program, retryChan chan struct{}) tea.Cmd {
+			return func() tea.Msg {
+				go runLoop(p, retryChan)
+				return ui.RunStartedMsg{}
+			}
+		}
+		if err := setup.InitProject(targetPath, runCmdCreator); err != nil {
 			ui.PrintError(fmt.Sprintf("Error initializing: %v", err))
 			os.Exit(1)
 		}
@@ -51,6 +57,11 @@ func main() {
 
 		ui.TUILogCallback = func(msg string) {
 			p.Send(ui.LogMsg(msg))
+		}
+
+		model.RunCmd = func() tea.Msg {
+			go runLoop(p, retryChan)
+			return ui.RunStartedMsg{}
 		}
 
 		go runLoop(p, retryChan)
@@ -96,6 +107,9 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 
 		if activeTask == nil {
 			ui.PrintSuccess("All tasks completed. The forge is done.")
+			if p != nil {
+				p.Send(ui.FinishedMsg{})
+			}
 			break
 		}
 

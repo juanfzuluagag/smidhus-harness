@@ -37,7 +37,7 @@ func CheckOpenCode() error {
 // InitProject runs the full interactive harness initialization flow for
 // targetPath, generating .harness/blueprint.md, agents.yml, and tasks.json.
 // The function is intentionally sequential — each phase feeds the next.
-func InitProject(targetPath string) error {
+func InitProject(targetPath string, runCmdCreator func(*tea.Program, chan struct{}) tea.Cmd) error {
 	ui.PrintBanner()
 
 	harnessDir := filepath.Join(targetPath, ".harness")
@@ -149,6 +149,7 @@ Welcome to the specifications directory. The Architect agent will generate desig
 
 	tuiModel := ui.NewInitTUIModel(modelMap, targetPath, blank, defaultName, initialContextData, execFunc)
 	p = tea.NewProgram(tuiModel, tea.WithAltScreen())
+	tuiModel.RunCmd = runCmdCreator(p, tuiModel.RetryChan)
 
 	ui.TUILogCallback = func(msg string) {
 		p.Send(ui.LogMsg(msg + "\n"))

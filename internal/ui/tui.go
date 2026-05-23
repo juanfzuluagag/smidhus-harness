@@ -27,6 +27,12 @@ type initCompletedMsg struct {
 	err   error
 }
 
+// FinishedMsg represents the message sent when the orchestrator loop completes all tasks.
+type FinishedMsg struct{}
+
+// RunStartedMsg represents the message sent when the orchestrator execution loop starts.
+type RunStartedMsg struct{}
+
 // Model defines the full-screen Bubble Tea TUI state.
 type Model struct {
 	thinkingViewport viewport.Model
@@ -67,6 +73,10 @@ type Model struct {
 	initErr  error
 	Width    int
 	Height   int
+
+	// Seamless Transition
+	isFinished bool
+	RunCmd     tea.Cmd
 }
 
 // NewTUIModel creates and initializes a Model with the retry signaling channel.
@@ -87,6 +97,7 @@ func NewInitTUIModel(modelMap map[string][]string, targetPath string, blankProje
 		qName:           defaultProjName,
 		contextData:     contextData,
 		execFunc:        execFunc,
+		RetryChan:       make(chan struct{}),
 	}
 }
 
@@ -206,6 +217,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 			}
 			return m, nil
+		case "r":
+			if m.isFinished && m.RunCmd != nil {
+				m.isFinished = false
+				m.focused = 1 // Focus logs viewport
+				return m, m.RunCmd
+			}
+			return m, nil
 		}
 
 		// Direct scrolling keys to the focused viewport
@@ -227,10 +245,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logViewport.SetContent(m.logContent.String())
 		m.logViewport.GotoBottom()
 
+	case FinishedMsg:
+		m.isFinished = true
+		m.logViewport.SetContent(m.logContent.String())
+		m.logViewport.GotoBottom()
+
+	case RunStartedMsg:
+		m.logContent.WriteString("\n" + PrimaryText.Render("[>] Starting Smidhus Harness execution loop...") + "\n")
+		m.logViewport.SetContent(m.logContent.String())
+		m.logViewport.GotoBottom()
+
 	case initCompletedMsg:
 		m.initStep = 6
 		m.guide = msg.guide
 		m.initErr = msg.err
+		m.isFinished = true
 
 		if msg.err != nil {
 			errBox := lipgloss.NewStyle().
@@ -359,6 +388,9 @@ func (m *Model) View() string {
 	footerText := " [Tab] Switch Focus  ·  [↑/↓] Scroll Focused Box  ·  [q] Quit "
 	if m.isInit && m.initStep < 5 {
 		footerText = " [Tab/Shift+Tab] Navigate  ·  [Enter] Next/Confirm  ·  [ctrl+c] Quit "
+	}
+	if m.isFinished {
+		footerText += "  ·  [r] Run (Start Forging)"
 	}
 	footer := footerStyle.Render(footerText)
 
