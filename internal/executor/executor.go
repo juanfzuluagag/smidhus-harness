@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"harness-cli/internal/config"
 	"harness-cli/internal/skills"
@@ -41,6 +42,7 @@ var knownErrorPatterns = []*regexp.Regexp{
 type opencodeEvent struct {
 	Type string `json:"type"`
 	Part struct {
+		Type  string `json:"type"`
 		Text  string `json:"text"`
 		Tool  string `json:"tool"`
 		State string `json:"state"`
@@ -181,9 +183,25 @@ func classifyError(line string) (string, bool) {
 // It monitors both stdout (for JSON thinking events) and stderr (for text errors and logs)
 // in real time, implementing a fail-fast mechanism on API/Quota/Rate Limit errors.
 // Returns elapsed time on success.
-func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, timeout time.Duration) (time.Duration, error) {
+func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, timeout time.Duration, p *tea.Program) (time.Duration, error) {
+	printLog := func(msg string) {
+		if p != nil {
+			p.Send(ui.LogMsg(msg + "\n"))
+		} else {
+			fmt.Print(msg + "\n")
+		}
+	}
+
+	printThinking := func(msg string) {
+		if p != nil {
+			p.Send(ui.ThinkingMsg(msg + "\n"))
+		} else {
+			fmt.Print(msg + "\n")
+		}
+	}
+
 	if len(cfg.Skills) > 0 {
-		ui.PrintInfo(fmt.Sprintf("[%s] Equipping skills: %v", agentName, cfg.Skills))
+		printLog(fmt.Sprintf(" >  [%s] Equipping skills: %v", agentName, cfg.Skills))
 		if err := skills.AutoEquip(cfg.Skills); err != nil {
 			return 0, err
 		}
@@ -217,10 +235,10 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 	}
 
 	thinkStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Primary)).
+		Foreground(lipgloss.Color("#737373")).
 		Italic(true)
 	thinkHeaderStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Primary)).
+		Foreground(lipgloss.Color("#737373")).
 		Bold(true)
 	toolStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.Muted))
@@ -267,52 +285,64 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 				// Try to parse as a JSON event (opencode --format json style).
 				var evt opencodeEvent
 				if json.Unmarshal([]byte(line), &evt) == nil {
-					switch evt.Type {
+					eventType := evt.Type
+					if eventType == "message.part.updated" || eventType == "message_part_updated" {
+						if evt.Part.Type != "" {
+							if evt.Part.Type == "tool" {
+								eventType = "tool_call"
+							} else {
+								eventType = evt.Part.Type
+							}
+						}
+					}
+
+					switch eventType {
 					case "assistant":
 						// Model/session header — not shown
 
 					case "step_start":
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "reasoning":
 						if !inThinking {
-							fmt.Println(thinkHeaderStyle.Render("┌─ Thinking..."))
+							printThinking(thinkHeaderStyle.Render("┌─ Thinking..."))
 							inThinking = true
 						}
 						if evt.Part.Text != "" {
 							for _, line := range strings.Split(evt.Part.Text, "\n") {
-								fmt.Println(thinkStyle.Render("│ " + line))
+								printThinking(thinkStyle.Render("│ " + line))
 							}
 						}
 
 					case "tool_call":
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 						if evt.Part.State == "pending" {
-							fmt.Println(toolStyle.Render("→ " + evt.Part.Tool))
+							printThinking(toolStyle.Render("→ " + evt.Part.Tool))
 						}
 
 					case "text":
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "step_finish":
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "error":
-						fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Error)).Render(
+						errMsg := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Error)).Render(
 							"✗ AI error: " + evt.Error.Data.Message,
-						))
+						)
+						printLog(errMsg)
 						mu.Lock()
 						detectedError = evt.Error.Data.Message
 						mu.Unlock()

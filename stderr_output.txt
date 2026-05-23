@@ -1,0 +1,32 @@
+INFO  2026-05-22T23:39:42 +97ms service=default version=1.15.6 args=["run","--model","google/gemini-2.5-flash","--dangerously-skip-permissions","--print-logs","dime hola"] process_role=main run_id=84cc3cfd-f248-47e5-98d9-a3b5b76d7d21 opencode
+INFO  2026-05-22T23:39:42 +17ms service=file init
+INFO  2026-05-22T23:39:42 +500ms service=db path=/Users/zugo/.local/share/opencode/opencode.db opening database
+INFO  2026-05-22T23:39:42 +6ms service=db count=20 mode=bundled applying migrations
+INFO  2026-05-22T23:39:42 +16ms service=default directory=/Users/zugo/Documents/work/personal/harness-cli creating instance
+INFO  2026-05-22T23:39:42 +1ms service=project directory=/Users/zugo/Documents/work/personal/harness-cli fromDirectory
+INFO  2026-05-22T23:39:42 +104ms service=default directory=/Users/zugo/Documents/work/personal/harness-cli bootstrapping
+INFO  2026-05-22T23:39:42 +4ms service=config path=/Users/zugo/.config/opencode/config.json loading
+INFO  2026-05-22T23:39:42 +1ms service=config path=/Users/zugo/.config/opencode/opencode.json loading
+INFO  2026-05-22T23:39:42 +0ms service=config path=/Users/zugo/.config/opencode/opencode.jsonc loading
+INFO  2026-05-22T23:39:42 +7ms service=plugin name=OG loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=qG loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=PV loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=rQ loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=_V loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=bV loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=IV loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=plugin name=yV loading internal plugin
+INFO  2026-05-22T23:39:42 +0ms service=bus type=* subscribing
+INFO  2026-05-22T23:39:42 +1ms service=lsp all LSPs are disabled
+INFO  2026-05-22T23:39:42 +0ms service=bus type=session.updated subscribing
+INFO  2026-05-22T23:39:42 +0ms service=bus type=message.updated subscribing
+INFO  2026-05-22T23:39:42 +1ms service=bus type=message.part.updated subscribing
+INFO  2026-05-22T23:39:42 +0ms service=bus type=session.diff subscribing
+INFO  2026-05-22T23:39:42 +0ms service=bus type=session.deleted subscribing
+INFO  2026-05-22T23:39:42 +0ms service=format all formatters are disabled
+INFO  2026-05-22T23:39:42 +0ms service=format init
+INFO  2026-05-22T23:39:42 +0ms service=file.watcher directory=/Users/zugo/Documents/work/personal/harness-cli init
+INFO  2026-05-22T23:39:43 +252ms service=file.watcher directory=/Users/zugo/Documents/work/personal/harness-cli platform=darwin backend=fs-events watcher backend
+INFO  2026-05-22T23:39:43 +4ms service=bus type=command.executed subscribing
+INFO  2026-05-22T23:39:43 +56ms service=vcs branch=main default_branch=main initialized
+INFO  2026-05-22T23:39:43 +0ms service=bus type=file.watcher.updated subscribing

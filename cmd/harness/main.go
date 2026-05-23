@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"harness-cli/internal/config"
 	"harness-cli/internal/executor"
@@ -44,7 +45,20 @@ func main() {
 		}
 
 	case "run":
-		runLoop()
+		retryChan := make(chan struct{})
+		model := ui.NewTUIModel(retryChan)
+		p := tea.NewProgram(model, tea.WithAltScreen())
+
+		ui.TUILogCallback = func(msg string) {
+			p.Send(ui.LogMsg(msg))
+		}
+
+		go runLoop(p, retryChan)
+
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+			os.Exit(1)
+		}
 
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
@@ -56,10 +70,7 @@ func main() {
 // State transitions are owned exclusively by Go — never delegated to the AI.
 // Both tasks.json and agents.yml are reloaded each iteration so the user can
 // edit them while the harness is paused without restarting.
-func runLoop() {
-	fmt.Print("\033[H\033[2J")
-	ui.PrintBanner()
-
+func runLoop(p *tea.Program, retryChan chan struct{}) {
 	for {
 		// Reload from disk every tick so mid-run edits are picked up immediately.
 		projectState, err := state.LoadState(tasksPath)
@@ -119,26 +130,45 @@ func runLoop() {
 						ui.BaseText.Render(" in ") + ui.PrimaryText.Render("tasks.json") +
 						ui.BaseText.Render(" to continue"),
 				)
-			fmt.Println("\n" + pauseBox)
 
-			// Poll every 3 seconds until the user edits tasks.json.
-			waitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Muted)).Italic(true)
-			dots := []string{"·  ", "·· ", "···"}
-			tick := 0
-			for {
-				time.Sleep(3 * time.Second)
-				tick++
-				fmt.Printf("\r%s", waitStyle.Render(fmt.Sprintf("Waiting for approval %s", dots[tick%3])))
+			if p != nil {
+				p.Send(ui.LogMsg("\n" + pauseBox + "\n"))
 
-				fresh, err := state.LoadState(tasksPath)
-				if err != nil {
-					continue // transient read error, keep waiting
+				for {
+					time.Sleep(3 * time.Second)
+					fresh, err := state.LoadState(tasksPath)
+					if err != nil {
+						continue
+					}
+					for i := range fresh.Tasks {
+						if fresh.Tasks[i].ID == activeTask.ID && fresh.Tasks[i].Status != "spec_ready" {
+							ui.PrintKeyValue("Detected", "Status changed to '"+fresh.Tasks[i].Status+"' — resuming...")
+							goto continueLoop
+						}
+					}
 				}
-				for i := range fresh.Tasks {
-					if fresh.Tasks[i].ID == activeTask.ID && fresh.Tasks[i].Status != "spec_ready" {
-						fmt.Println() // newline after the inline waiting indicator
-						ui.PrintKeyValue("Detected", "Status changed to '"+fresh.Tasks[i].Status+"' — resuming...")
-						goto continueLoop
+			} else {
+				fmt.Println("\n" + pauseBox)
+
+				// Poll every 3 seconds until the user edits tasks.json.
+				waitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Muted)).Italic(true)
+				dots := []string{"·  ", "·· ", "···"}
+				tick := 0
+				for {
+					time.Sleep(3 * time.Second)
+					tick++
+					fmt.Printf("\r%s", waitStyle.Render(fmt.Sprintf("Waiting for approval %s", dots[tick%3])))
+
+					fresh, err := state.LoadState(tasksPath)
+					if err != nil {
+						continue // transient read error, keep waiting
+					}
+					for i := range fresh.Tasks {
+						if fresh.Tasks[i].ID == activeTask.ID && fresh.Tasks[i].Status != "spec_ready" {
+							fmt.Println() // newline after the inline waiting indicator
+							ui.PrintKeyValue("Detected", "Status changed to '"+fresh.Tasks[i].Status+"' — resuming...")
+							goto continueLoop
+						}
 					}
 				}
 			}
@@ -200,6 +230,7 @@ func runLoop() {
 			agentCfg,
 			string(agentContent),
 			cfg.GlobalSettings.Timeout(),
+			p,
 		)
 
 		if runErr != nil {
@@ -212,11 +243,23 @@ func runLoop() {
 				Render(
 					ui.ErrorText.Render("[x] Agent failed: "+targetAgent) + "\n\n" +
 						ui.BaseText.Render(runErr.Error()) + "\n\n" +
-						ui.MutedText.Render("State was NOT advanced. Press Enter to retry, or Ctrl+C to abort."),
+						ui.MutedText.Render("State was NOT advanced. Press Enter to retry, or q to abort."),
 				)
-			fmt.Println("\n" + errBox)
-
-			fmt.Scanln()
+			
+			if p != nil {
+				p.Send(ui.LogMsg("\n" + errBox + "\n"))
+				
+				// Drain any old retry signal
+				select {
+				case <-retryChan:
+				default:
+				}
+				// Wait for TUI retry command (Enter key)
+				<-retryChan
+			} else {
+				fmt.Println("\n" + errBox)
+				fmt.Scanln()
+			}
 			continue
 		}
 
@@ -246,7 +289,9 @@ func runLoop() {
 			os.Exit(1)
 		}
 
-		fmt.Println()
+		if p == nil {
+			fmt.Println()
+		}
 		time.Sleep(1 * time.Second)
 	}
 }

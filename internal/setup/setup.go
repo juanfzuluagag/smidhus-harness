@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/charmbracelet/huh"
+	tea "github.com/charmbracelet/bubbletea"
+	"harness-cli/internal/scanner"
 	"harness-cli/internal/ui"
 )
 
@@ -41,6 +41,12 @@ func InitProject(targetPath string) error {
 	ui.PrintBanner()
 
 	harnessDir := filepath.Join(targetPath, ".harness")
+
+	// Perform shallow scan on target project path
+	shallowTree, err := scanner.ShallowScan(targetPath, 3)
+	if err != nil {
+		return fmt.Errorf("could not scan project directory tree: %w", err)
+	}
 
 	// Create folder skeleton for state and spec artifacts.
 	for _, d := range []string{
@@ -80,87 +86,83 @@ Welcome to the specifications directory. The Architect agent will generate desig
 		}
 	}
 
-	selectedModel, err := selectModel(modelMap)
-	if err != nil {
-		return fmt.Errorf("model selection failed: %w", err)
-	}
-
-	budget, err := askThinkingBudget()
-	if err != nil {
-		return fmt.Errorf("budget selection failed: %w", err)
-	}
-
-	aiMode, err := askBlueprintMode()
-	if err != nil {
-		return fmt.Errorf("mode selection failed: %w", err)
-	}
-
-	// Collect context: blank projects go straight to the questionnaire;
-	// existing codebases can choose between AI scan and manual input.
 	blank, err := isBlankProject(targetPath)
 	if err != nil {
 		return fmt.Errorf("could not scan project directory: %w", err)
 	}
 
-	var contextData string
 	absPath, _ := filepath.Abs(targetPath)
 	defaultName := filepath.Base(absPath)
 
-	if blank {
-		contextData, err = runQuestionnaire(defaultName)
-		if err != nil {
-			return fmt.Errorf("questionnaire error: %w", err)
-		}
-	} else {
-		var useAI bool
-		err := huh.NewConfirm().
-			Title("Advanced Project Detected").
-			Description("This directory contains code. Do you want the AI to scan the architecture? (Warning: Consumes more tokens)").
-			Affirmative("Yes, AI Scan").
-			Negative("No, Manual Questionnaire").
-			Value(&useAI).
-			WithTheme(getTheme()).
-			Run()
-
-		if err != nil {
-			return err
-		}
-
-		if useAI && aiMode {
-			contextData = collectRepoXray(targetPath)
+	// Pre-generate standard contextData for non-blank project in case user selects AI Scan
+	var initialContextData string
+	if !blank {
+		var readmeContent []byte
+		readmePath := filepath.Join(targetPath, "README.md")
+		if _, err := os.Stat(readmePath); err == nil {
+			readmeContent, _ = os.ReadFile(readmePath)
 		} else {
-			contextData, err = runQuestionnaire(defaultName)
-			if err != nil {
-				return fmt.Errorf("questionnaire error: %w", err)
+			readmePathLower := filepath.Join(targetPath, "readme.md")
+			if _, err := os.Stat(readmePathLower); err == nil {
+				readmeContent, _ = os.ReadFile(readmePathLower)
 			}
 		}
+		initialContextData = fmt.Sprintf("## Directory Structure\n```\n%s```\n## README\n%s\n", shallowTree, string(readmeContent))
 	}
 
-	// Generate blueprint: AI mode sends collected context to opencode;
-	// manual mode formats it into a plain markdown scaffold.
-	if aiMode {
-		if err := generateBlueprintAI(selectedModel, contextData, harnessDir); err != nil {
-			return fmt.Errorf("AI blueprint generation failed: %w", err)
+	var p *tea.Program
+
+	execFunc := func(selModel string, budget int, aiMode bool, contextData string) (string, error) {
+		// 1. Generate blueprint
+		if aiMode {
+			if err := generateBlueprintAI(selModel, contextData, harnessDir, p); err != nil {
+				return "", err
+			}
+		} else {
+			if err := generateBlueprintManual(contextData, harnessDir); err != nil {
+				return "", err
+			}
 		}
-	} else {
-		if err := generateBlueprintManual(contextData, harnessDir); err != nil {
-			return fmt.Errorf("manual blueprint generation failed: %w", err)
+
+		// Sync the actual local directory tree into the generated blueprint
+		blueprintPath := filepath.Join(harnessDir, "blueprint.md")
+		if err := scanner.SyncBlueprintTree(blueprintPath, shallowTree); err != nil {
+			return "", err
 		}
+
+		// 2. Wire up agents.yml and seed the first task.
+		if err := generateAgentsAI(selModel, budget, modelMap, harnessDir, p); err != nil {
+			return "", err
+		}
+
+		if err := writeTasksJSON(harnessDir, defaultName); err != nil {
+			return "", err
+		}
+
+		// Read final quickstart guide
+		guideRaw, err := TemplatesFS.ReadFile("templates/post_init_guide.txt")
+		if err != nil {
+			return "", err
+		}
+		return string(guideRaw), nil
 	}
 
-	// Wire up agents.yml and seed the first task.
-	if err := generateAgentsAI(selectedModel, budget, modelMap, harnessDir); err != nil {
-		return fmt.Errorf("could not generate agents.yml: %w", err)
-	}
-	if err := writeTasksJSON(harnessDir, defaultName); err != nil {
-		return fmt.Errorf("could not write tasks.json: %w", err)
+	tuiModel := ui.NewInitTUIModel(modelMap, targetPath, blank, defaultName, initialContextData, execFunc)
+	p = tea.NewProgram(tuiModel, tea.WithAltScreen())
+
+	ui.TUILogCallback = func(msg string) {
+		p.Send(ui.LogMsg(msg + "\n"))
 	}
 
-	// ── Final message: read from embedded template ──────────────────────
-	guideRaw, err := TemplatesFS.ReadFile("templates/post_init_guide.txt")
-	if err != nil {
-		return fmt.Errorf("could not read post-init guide: %w", err)
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("failed to run TUI: %w", err)
 	}
-	fmt.Println("\n" + ui.RenderMessage(strings.TrimSpace(string(guideRaw))))
+
+	ui.TUILogCallback = nil
+
+	if tuiModel.InitErr() != nil {
+		return tuiModel.InitErr()
+	}
+
 	return nil
 }

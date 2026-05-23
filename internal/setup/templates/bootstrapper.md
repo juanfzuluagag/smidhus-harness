@@ -20,8 +20,12 @@ You will receive a block of "Context Data" below. This block can come in two for
 - **Language/Framework**: [Inferred or answered]
 - **Dependency Manager**: [Inferred or answered]
 
-## 2. Architecture & Design Patterns
-- [Required folder structure, naming conventions, applicable patterns]
+## 2. Architecture & Directory Structure
+[LLM description of the architecture pattern, e.g., Hexagonal, MVC]
+
+<!-- dir_tree_start -->
+[Leave this section blank or insert the initial tree here]
+<!-- dir_tree_end -->
 
 ## 3. UI/UX & Design System
 - [Colors, typography, UI kits. If it is strictly backend, indicate "N/A - Backend API"]

@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"harness-cli/internal/config"
 	"harness-cli/internal/ui"
@@ -26,7 +27,7 @@ import (
 // It implements fail-fast on API/quota/rate-limit errors via the stderr watchdog.
 // Using a cancellable context (not a timeout) means the watchdog is the sole
 // authority for inactivity termination, keeping the logic in one place.
-func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, error) {
+func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Program) (string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -49,19 +50,67 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 	}
 	cmd.Stdin = os.Stdin
 
+	// ── Spinner for Initial Wait (only in non-TUI mode) ──────────────────────
+	var stopSpinner func() = func() {}
+	if p == nil {
+		spinnerChan := make(chan struct{})
+		go func() {
+			frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+			i := 0
+			ticker := time.NewTicker(80 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-spinnerChan:
+					fmt.Print("\r\x1b[K") // Clear the line when stopped
+					return
+				case <-ticker.C:
+					frame := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Primary)).Render(frames[i%len(frames)])
+					fmt.Printf("\r %s Waiting for AI response...", frame)
+					i++
+				}
+			}
+		}()
+
+		var spinnerOnce sync.Once
+		stopSpinner = func() {
+			spinnerOnce.Do(func() {
+				close(spinnerChan)
+				time.Sleep(20 * time.Millisecond) // Ensure the goroutine finishes clearing the line
+			})
+		}
+	}
+	defer stopSpinner()
+
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
 
 	// Styles for rendering thinking blocks and tool calls in the terminal
 	thinkStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Primary)).
+		Foreground(lipgloss.Color("#737373")).
 		Italic(true)
 	thinkHeaderStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Primary)).
+		Foreground(lipgloss.Color("#737373")).
 		Bold(true)
 	toolStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.Muted))
+
+	printLog := func(msg string) {
+		if p != nil {
+			p.Send(ui.LogMsg(msg + "\n"))
+		} else {
+			fmt.Println(msg)
+		}
+	}
+
+	printThinking := func(msg string) {
+		if p != nil {
+			p.Send(ui.ThinkingMsg(msg + "\n"))
+		} else {
+			fmt.Println(msg)
+		}
+	}
 
 	var (
 		mu                sync.Mutex
@@ -104,59 +153,71 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		for {
 			raw, err := reader.ReadString('\n')
 			if len(raw) > 0 {
+				stopSpinner()
 				updateActivity()
 				stdoutBuf.WriteString(raw)
 
 				var evt opencodeEvent
 				if json.Unmarshal([]byte(raw), &evt) == nil {
-					switch evt.Type {
+					eventType := evt.Type
+					if eventType == "message.part.updated" || eventType == "message_part_updated" {
+						if evt.Part.Type != "" {
+							if evt.Part.Type == "tool" {
+								eventType = "tool_call"
+							} else {
+								eventType = evt.Part.Type
+							}
+						}
+					}
+
+					switch eventType {
 					case "assistant":
 						// Model/session header — not shown (internal event)
 
 					case "step_start":
 						// New step beginning — close thinking block if open
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "reasoning":
 						// The AI's reasoning/thinking block
 						if !inThinking {
-							fmt.Println(thinkHeaderStyle.Render("┌─ Thinking..."))
+							printThinking(thinkHeaderStyle.Render("┌─ Thinking..."))
 							inThinking = true
 						}
 						if evt.Part.Text != "" {
 							for _, line := range strings.Split(evt.Part.Text, "\n") {
-								fmt.Println(thinkStyle.Render("│ " + line))
+								printThinking(thinkStyle.Render("│ " + line))
 							}
 						}
 
 					case "tool_call":
 						// Tool invocation (read file, patch, etc.)
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 						if evt.Part.State == "pending" {
-							fmt.Println(toolStyle.Render("→ " + evt.Part.Tool))
+							printThinking(toolStyle.Render("→ " + evt.Part.Tool))
 						}
 
 					case "text":
 						// The model's final text response — we do NOT print it
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "step_finish":
 						if inThinking {
-							fmt.Println(thinkHeaderStyle.Render("└─ end thinking"))
+							printThinking(thinkHeaderStyle.Render("└─ end thinking"))
 							inThinking = false
 						}
 
 					case "error":
-						fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Error)).Render(
+						printLog(lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Error)).Render(
 							"✗ AI error: " + evt.Error.Data.Message,
 						))
 						mu.Lock()
@@ -182,6 +243,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		for {
 			line, err := reader.ReadString('\n')
 			if len(line) > 0 {
+				stopSpinner()
 				updateActivity()
 
 				stderrMu.Lock()
@@ -205,8 +267,8 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 		}
 	}()
 
-	// Watchdog: cancel the process if the model goes silent for 2 minutes.
-	// Two minutes is chosen to be long enough for slow reasoning models but
+	// Watchdog: cancel the process if the model goes silent for 10 minutes.
+	// Ten minutes is chosen to be long enough for slow reasoning models but
 	// short enough to catch a hung or rate-limited connection.
 	watchdogDone := make(chan struct{})
 	go func() {
@@ -218,7 +280,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 				return
 			case <-ticker.C:
 				last := atomic.LoadInt64(&lastActivity)
-				if time.Since(time.Unix(0, last)) > 2*time.Minute {
+				if time.Since(time.Unix(0, last)) > 10*time.Minute {
 					killProcess("inactivity")
 					return
 				}
@@ -284,7 +346,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string) (string, e
 // generateBlueprintAI sends the bootstrapper prompt plus collected context to
 // opencode. The AI writes directly to blueprint.md; stdout is a fallback for
 // models that print output instead of saving files.
-func generateBlueprintAI(model, contextData, harnessDir string) error {
+func generateBlueprintAI(model, contextData, harnessDir string, p *tea.Program) error {
 	bootstrapperRaw, err := TemplatesFS.ReadFile("templates/bootstrapper.md")
 	if err != nil {
 		return fmt.Errorf("could not read embedded bootstrapper template: %w", err)
@@ -303,7 +365,7 @@ func generateBlueprintAI(model, contextData, harnessDir string) error {
 	defer cancel()
 
 	start := time.Now()
-	rawOutput, runErr := runOpencodeWithFilter(ctx, model, prompt)
+	rawOutput, runErr := runOpencodeWithFilter(ctx, model, prompt, p)
 	elapsed := time.Since(start)
 
 	if ctx.Err() == context.DeadlineExceeded {
@@ -402,7 +464,7 @@ type agentsPromptData struct {
 // generateAgentsAI asks the AI to fill in the agents.yml template by choosing
 // appropriate models from the available list. Using text/template keeps the
 // long prompt out of the Go source and makes it independently editable.
-func generateAgentsAI(model string, budget int, modelMap map[string][]string, harnessDir string) error {
+func generateAgentsAI(model string, budget int, modelMap map[string][]string, harnessDir string, p *tea.Program) error {
 	agentsYAMLPath := filepath.Join(harnessDir, "agents.yml")
 	timeout := time.Duration(config.DefaultTimeoutSec) * time.Second
 
@@ -436,7 +498,7 @@ func generateAgentsAI(model string, budget int, modelMap map[string][]string, ha
 	defer cancel()
 
 	start := time.Now()
-	rawOutput, runErr := runOpencodeWithFilter(ctx, model, promptBuf.String())
+	rawOutput, runErr := runOpencodeWithFilter(ctx, model, promptBuf.String(), p)
 	elapsed := time.Since(start)
 
 	if ctx.Err() == context.DeadlineExceeded {

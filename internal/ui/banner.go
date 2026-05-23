@@ -29,8 +29,14 @@ var (
 	ValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Bold(true)
 )
 
+// TUILogCallback is an optional callback to route print messages to the TUI.
+var TUILogCallback func(string)
+
 // PrintBanner prints the main application banner
 func PrintBanner() {
+	if TUILogCallback != nil {
+		return
+	}
 	banner := `
    _____ __  __ ________  __  __  _______    __  _____    ____  _   ________________ 
   / ___//  |/  //  _/ __ \/ / / / / / ___/   / / / /   |  / __ \/ | / / ____/ ___/ ___/
@@ -43,35 +49,65 @@ func PrintBanner() {
 
 // PrintSuccess prints a success message using industrial brackets
 func PrintSuccess(msg string) {
-	fmt.Println(SuccessText.Render("[+] ") + BaseText.Render(msg))
+	styled := SuccessText.Render("[+] ") + BaseText.Render(msg)
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // PrintError prints an error message using industrial brackets
 func PrintError(msg string) {
-	fmt.Println(ErrorText.Render("[x] ") + BaseText.Render(msg))
+	styled := ErrorText.Render("[x] ") + BaseText.Render(msg)
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // PrintWarning prints a warning message using industrial brackets
 func PrintWarning(msg string) {
-	fmt.Println(WarningText.Render("[!] ") + BaseText.Render(msg))
+	styled := WarningText.Render("[!] ") + BaseText.Render(msg)
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // PrintInfo prints a neutral info message using industrial brackets
 func PrintInfo(msg string) {
-	fmt.Println(PrimaryText.Render(" >  ") + BaseText.Render(msg))
+	styled := PrimaryText.Render(" >  ") + BaseText.Render(msg)
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // PrintKeyValue renders a clean Key-Value row with a rigid divider
 func PrintKeyValue(key, value string) {
 	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Render(" :: ")
-	fmt.Println(lipgloss.JoinHorizontal(lipgloss.Left, KeyStyle.Render(key), divider, ValueStyle.Render(value)))
+	styled := lipgloss.JoinHorizontal(lipgloss.Left, KeyStyle.Render(key), divider, ValueStyle.Render(value))
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // PrintStep renders a minimalist progress step
 func PrintStep(step, detail string) {
 	stepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(Primary)).Width(12).Align(lipgloss.Right).Bold(true)
 	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(Muted)).Render(" █ ")
-	fmt.Println(lipgloss.JoinHorizontal(lipgloss.Left, stepStyle.Render(step), divider, BaseText.Render(detail)))
+	styled := lipgloss.JoinHorizontal(lipgloss.Left, stepStyle.Render(step), divider, BaseText.Render(detail))
+	if TUILogCallback != nil {
+		TUILogCallback(styled)
+	} else {
+		fmt.Println(styled)
+	}
 }
 
 // RenderMessage renders a simple message in steel text

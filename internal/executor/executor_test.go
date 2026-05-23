@@ -201,7 +201,7 @@ func main() {
 	}
 
 	t.Run("Success agent run", func(t *testing.T) {
-		elapsed, err := RunAgent("builder", cfg, "SUCCESS", 5*time.Second)
+		elapsed, err := RunAgent("builder", cfg, "SUCCESS", 5*time.Second, nil)
 		if err != nil {
 			t.Fatalf("unexpected execution failure: %v", err)
 		}
@@ -211,7 +211,7 @@ func main() {
 	})
 
 	t.Run("Fail fast rate limit", func(t *testing.T) {
-		_, err := RunAgent("builder", cfg, "RATELIMIT", 5*time.Second)
+		_, err := RunAgent("builder", cfg, "RATELIMIT", 5*time.Second, nil)
 		if err == nil {
 			t.Fatal("expected execution failure, got nil")
 		}
@@ -221,7 +221,7 @@ func main() {
 	})
 
 	t.Run("Global timeout triggers cancel", func(t *testing.T) {
-		_, err := RunAgent("builder", cfg, "SLEEP", 50*time.Millisecond)
+		_, err := RunAgent("builder", cfg, "SLEEP", 50*time.Millisecond, nil)
 		if err == nil {
 			t.Fatal("expected timeout error, got nil")
 		}
