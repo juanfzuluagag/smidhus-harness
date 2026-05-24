@@ -40,3 +40,26 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+
+# ---------------------------------------------------
+# AUTOMATED DISTRIBUTION (Homebrew & Scoop)
+# ---------------------------------------------------
+brews:
+  - repository:
+      owner: smidhus
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    name: harness
+    directory: Formula
+    description: "Deterministic CLI orchestrator for AI agents."
+    homepage: "https://smidhus.dev"
+
+scoops:
+  - repository:
+      owner: smidhus
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    name: harness
+    directory: bucket
+    description: "Deterministic CLI orchestrator for AI agents."
+    homepage: "https://smidhus.dev"

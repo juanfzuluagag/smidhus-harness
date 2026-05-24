@@ -1,6 +1,10 @@
 # Smidhus Harness
 > **Official Website:** [smidhus.dev](https://smidhus.dev) | **Documentation:** [docs.smidhus.dev](https://docs.smidhus.dev)
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/juanfzuluagag/smidhus-harness.svg)](https://pkg.go.dev/github.com/juanfzuluagag/smidhus-harness)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Release](https://img.shields.io/github/v/release/juanfzuluagag/smidhus-harness)](https://github.com/juanfzuluagag/smidhus-harness/releases)
+
 Smidhus Harness is a lightweight, local orchestrator and deterministic execution engine designed for Spec-Driven Development (SDD). Built in Go, it serves as a central control plane to coordinate a team of autonomous AI agents through the OpenCode platform.
 
 Traditional agentic workflows often suffer from infinite loops, agent stalling, and uncontrolled context expansion when agents try to orchestrate their own execution. Smidhus Harness solves this by managing the state machine natively in compiled Go code. The AI agents focus purely on execution (design, code, cloud, QA, docs) while Go enforces the transitions, handles timeouts, and monitors execution health.
@@ -16,9 +20,8 @@ While the savings on trivial single-shot tasks may be negligible, the architectu
 *   **Deterministic State Machine:** Go manages the workflow state machine natively, preventing agents from getting stuck in loops.
 *   **Smart Fail-Fast Guard:** Real-time quota and API monitoring intercepts execution immediately upon encountering rate limits (HTTP 429/quota exhaustion), preventing prolonged hangs and unnecessary billing.
 *   **Vision Integration for UI/UX:** The Designer agent scans visual mockups dropped into the specs directory to generate pixel-perfect, responsive components.
-*   **Clean Workspace Management:** The Gatekeeper archives successfully validated specification files automatically upon test completion to avoid cluttering the developer's workspace.
-*   **Dark Forge Style CLI:** A serious, industrial, high-performance console interface optimized for engineering teams.
-
+* **Clean Workspace Management:** The Gatekeeper archives successfully validated specification files automatically upon test completion to avoid cluttering the developer's workspace.
+* **Dark Forge TUI:** A full-screen, responsive Terminal User Interface (powered by Bubble Tea) optimized for engineering teams. It isolates agent reasoning ("thinking" logs) from orchestrator states and features a seamless `[r] Run` continuous workflow so you never have to leave the terminal.
 ---
 
 ## The AI Agents Pool
@@ -57,18 +60,29 @@ Ensure you have the following installed on your machine:
 
 ## Installation
 
-Clone the repository and build the binary:
+Install Smidhus Harness using one of the following package managers or from source:
 
+### macOS / Linux (Homebrew)
+```bash
+brew install smidhus/tap/harness
+```
+
+### Windows (Scoop)
+```bash
+scoop install smidhus/harness
+```
+
+### Go Toolchain
+For developers with a configured Go toolchain:
+```bash
+go install github.com/juanfzuluagag/smidhus-harness/cmd/harness@latest
+```
+
+### From Source
 ```bash
 git clone https://github.com/juanfzuluagag/smidhus-harness.git
 cd smidhus-harness
 go build -o smidhus-harness ./cmd/harness
-```
-
-Or install it directly via Go:
-
-```bash
-go install github.com/juanfzuluagag/smidhus-harness/cmd/harness@latest
 ```
 
 ---
@@ -200,3 +214,6 @@ This project is free and open-source software distributed under the **GNU Genera
 This means you are free to use, modify, and distribute this software. However, any derivative works or modifications must also be released as open-source under the same GPLv3 license, ensuring that the core engine remains free and open for the community forever. 
 
 See the `LICENSE` file for more details.
+
+---
+*Built with precision by [Smidhus](https://smidhus.dev).*
