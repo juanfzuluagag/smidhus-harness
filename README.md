@@ -64,7 +64,7 @@ Install Smidhus Harness using one of the following package managers or from sour
 
 ### macOS / Linux (Homebrew)
 ```bash
-brew install smidhus/tap/harness
+brew install smidhus-harness
 ```
 
 ### Windows (Scoop)
@@ -84,6 +84,22 @@ git clone https://github.com/juanfzuluagag/smidhus-harness.git
 cd smidhus-harness
 go build -o smidhus-harness ./cmd/harness
 ```
+
+---
+
+## CLI Commands
+
+Smidhus Harness supports the following CLI commands and global options:
+
+### Commands
+*   `init [path]` - Initializes the Harness workspace environment in a directory (default: current directory).
+*   `run` - Starts or resumes the orchestrator state machine execution loop.
+*   `version` - Displays the current version and git commit hash of the binary.
+*   `help` - Shows the help menu with usage guidelines.
+
+### Flags / Global Options
+*   `-v, --version` - Displays version information.
+*   `-h, --help` - Displays help and usage guidelines.
 
 ---
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,13 +18,67 @@ import (
 
 const tasksPath = ".harness/state/tasks.json"
 
+var (
+	version = "dev"
+	commit  = "none"
+)
+
+func printHelp() {
+	ui.PrintBanner()
+
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Primary)).Bold(true)
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Text))
+	mutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Muted))
+	boldStyle := lipgloss.NewStyle().Bold(true)
+
+	printRow := func(label, desc string, labelStyle lipgloss.Style) {
+		const targetWidth = 16
+		padding := ""
+		if len(label) < targetWidth {
+			padding = strings.Repeat(" ", targetWidth-len(label))
+		}
+		fmt.Printf("  %s%s%s\n", labelStyle.Render(label), padding, descStyle.Render(desc))
+	}
+
+	fmt.Println(titleStyle.Render("Smidhus Harness") + " - " + descStyle.Render("Deterministic CLI orchestrator for AI agents with Opencode"))
+	fmt.Println()
+	fmt.Println(boldStyle.Render("Usage:"))
+	fmt.Println("  smidhus-harness <command> [arguments]")
+	fmt.Println()
+	fmt.Println(boldStyle.Render("Commands:"))
+	printRow("init [path]", "Initializes the Harness environment in a project (default: current dir)", titleStyle)
+	printRow("run", "Runs the state machine loop", titleStyle)
+	printRow("version", "Displays the current version and commit hash", titleStyle)
+	printRow("help", "Displays this help menu", titleStyle)
+	fmt.Println()
+	fmt.Println(boldStyle.Render("Flags / Global Options:"))
+	printRow("-v, --version", "Display version information", mutedStyle)
+	printRow("-h, --help", "Display help and usage guidelines", mutedStyle)
+	fmt.Println()
+}
+
+func printVersion() {
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Primary)).Bold(true)
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Text))
+	mutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Muted))
+
+	fmt.Printf("%s version %s (commit: %s)\n", titleStyle.Render("smidhus-harness"), descStyle.Render(version), mutedStyle.Render(commit))
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: smidhus-harness <command> [arguments]")
-		fmt.Println("Commands:")
-		fmt.Println("  init [path]   - Initializes the Harness environment in a project (default: current dir)")
-		fmt.Println("  run           - Runs the state machine loop")
-		os.Exit(1)
+		printHelp()
+		os.Exit(0)
+	}
+
+	arg1 := strings.ToLower(os.Args[1])
+	if arg1 == "-v" || arg1 == "--version" || arg1 == "version" {
+		printVersion()
+		os.Exit(0)
+	}
+	if arg1 == "-h" || arg1 == "--help" || arg1 == "help" {
+		printHelp()
+		os.Exit(0)
 	}
 
 	if err := setup.CheckOpenCode(); err != nil {

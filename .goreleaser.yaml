@@ -49,7 +49,7 @@ brews:
       owner: smidhus
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    name: harness
+    name: smidhus-harness
     directory: Formula
     description: "Deterministic CLI orchestrator for AI agents."
     homepage: "https://smidhus.dev"
@@ -59,7 +59,7 @@ scoops:
       owner: smidhus
       name: scoop-bucket
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    name: harness
+    name: smidhus-harness
     directory: bucket
     description: "Deterministic CLI orchestrator for AI agents."
     homepage: "https://smidhus.dev"
