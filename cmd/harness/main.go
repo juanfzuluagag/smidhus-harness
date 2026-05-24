@@ -146,6 +146,7 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				)
 
 			if p != nil {
+				p.Send(ui.SetAgentMsg{Agent: "", Skill: ""})
 				p.Send(ui.LogMsg("\n" + pauseBox + "\n"))
 
 				for {
@@ -261,6 +262,7 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				)
 			
 			if p != nil {
+				p.Send(ui.SetAgentMsg{Agent: "", Skill: ""})
 				p.Send(ui.LogMsg("\n" + errBox + "\n"))
 				
 				// Drain any old retry signal
@@ -272,7 +274,7 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				<-retryChan
 			} else {
 				fmt.Println("\n" + errBox)
-				fmt.Scanln()
+				_, _ = fmt.Scanln()
 			}
 			continue
 		}

@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -17,6 +17,12 @@ type LogMsg string
 
 // ThinkingMsg represents an AI thinking message to append to the thinking viewport.
 type ThinkingMsg string
+
+// SetAgentMsg represents a message to update the active agent and skill tracking in the TUI.
+type SetAgentMsg struct {
+	Agent string
+	Skill string
+}
 
 // InitExecFunc represents the background generation function for init.
 type InitExecFunc func(selectedModel string, budget int, aiMode bool, contextData string) (string, error)
@@ -77,6 +83,10 @@ type Model struct {
 	// Seamless Transition
 	isFinished bool
 	RunCmd     tea.Cmd
+
+	// Active agent and skill tracking
+	ActiveAgent string
+	ActiveSkill string
 }
 
 // NewTUIModel creates and initializes a Model with the retry signaling channel.
@@ -240,6 +250,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinkingViewport.SetContent(m.thinkingContent.String())
 		m.thinkingViewport.GotoBottom()
 
+		// Extract agent and skill from the header if present
+		line := string(msg)
+		cleanLine := stripAnsiCodes(line)
+		if idx := strings.Index(cleanLine, "┌─ ["); idx != -1 {
+			startIdx := idx + len("┌─ [")
+			endIdx := strings.Index(cleanLine[startIdx:], "]")
+			if endIdx != -1 {
+				content := cleanLine[startIdx : startIdx+endIdx]
+				if parts := strings.Split(content, " ⚡ "); len(parts) == 2 {
+					m.ActiveAgent = parts[0]
+					m.ActiveSkill = parts[1]
+				} else {
+					m.ActiveAgent = content
+					m.ActiveSkill = ""
+				}
+			}
+		}
+
+	case SetAgentMsg:
+		m.ActiveAgent = msg.Agent
+		m.ActiveSkill = msg.Skill
+
 	case LogMsg:
 		m.logContent.WriteString(string(msg))
 		m.logViewport.SetContent(m.logContent.String())
@@ -247,6 +279,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FinishedMsg:
 		m.isFinished = true
+		m.ActiveAgent = ""
+		m.ActiveSkill = ""
 		m.logViewport.SetContent(m.logContent.String())
 		m.logViewport.GotoBottom()
 
@@ -260,6 +294,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.guide = msg.guide
 		m.initErr = msg.err
 		m.isFinished = true
+		m.ActiveAgent = ""
+		m.ActiveSkill = ""
 
 		if msg.err != nil {
 			errBox := lipgloss.NewStyle().
@@ -320,48 +356,62 @@ func (m *Model) View() string {
 			Background(lipgloss.Color(Primary)).
 			Bold(true).
 			Render(" PROJECT INITIALIZATION SETUP ")
-	} else if m.focused == 0 {
-		thinkBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(Primary)).
-			Padding(0, 1)
-
-		logBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(Muted)).
-			Padding(0, 1)
-
-		thinkTitle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color(Primary)).
-			Bold(true).
-			Render(" THINKING (Reasoning Process - Active) ")
-
-		logTitle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Muted)).
-			Bold(true).
-			Render(" ORCHESTRATION LOGS ")
 	} else {
-		thinkBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(Muted)).
-			Padding(0, 1)
+		var activeText string
+		if m.ActiveAgent != "" {
+			if m.ActiveSkill != "" {
+				activeText = fmt.Sprintf("Active: %s ⚡ %s", m.ActiveAgent, m.ActiveSkill)
+			} else {
+				activeText = fmt.Sprintf("Active: %s", m.ActiveAgent)
+			}
+		} else {
+			activeText = "Idle"
+		}
+		thinkTitleText := fmt.Sprintf(" THINKING (%s) ", activeText)
 
-		logBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(Primary)).
-			Padding(0, 1)
+		if m.focused == 0 {
+			thinkBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(Primary)).
+				Padding(0, 1)
 
-		thinkTitle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Muted)).
-			Bold(true).
-			Render(" THINKING (Reasoning Process) ")
+			logBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(Muted)).
+				Padding(0, 1)
 
-		logTitle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color(Primary)).
-			Bold(true).
-			Render(" ORCHESTRATION LOGS - Active ")
+			thinkTitle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(lipgloss.Color(Primary)).
+				Bold(true).
+				Render(thinkTitleText)
+
+			logTitle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(Muted)).
+				Bold(true).
+				Render(" ORCHESTRATION LOGS ")
+		} else {
+			thinkBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(Muted)).
+				Padding(0, 1)
+
+			logBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(Primary)).
+				Padding(0, 1)
+
+			thinkTitle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(Muted)).
+				Bold(true).
+				Render(thinkTitleText)
+
+			logTitle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(lipgloss.Color(Primary)).
+				Bold(true).
+				Render(" ORCHESTRATION LOGS - Active ")
+		}
 	}
 
 	// Enforce static width and height to prevent dynamic expanding/shrinking of borders.
@@ -542,7 +592,7 @@ func (m *Model) updateThinkingSummary() {
 	
 	// Provider
 	if m.selectedProvider != "" {
-		sb.WriteString(fmt.Sprintf("│ Provider :: %s\n", m.selectedProvider))
+		fmt.Fprintf(&sb, "│ Provider :: %s\n", m.selectedProvider)
 	} else if m.initStep == 0 {
 		sb.WriteString("│ Provider :: (selecting...)\n")
 	} else {
@@ -551,7 +601,7 @@ func (m *Model) updateThinkingSummary() {
 	
 	// Model
 	if m.selectedModel != "" {
-		sb.WriteString(fmt.Sprintf("│    Model :: %s\n", m.selectedModel))
+		fmt.Fprintf(&sb, "│    Model :: %s\n", m.selectedModel)
 	} else if m.initStep == 1 {
 		sb.WriteString("│    Model :: (selecting...)\n")
 	} else {
@@ -564,7 +614,7 @@ func (m *Model) updateThinkingSummary() {
 		if m.budget > 0 {
 			budgetStr = fmt.Sprintf("%d ms", m.budget)
 		}
-		sb.WriteString(fmt.Sprintf("│   Budget :: %s\n", budgetStr))
+		fmt.Fprintf(&sb, "│   Budget :: %s\n", budgetStr)
 	} else if m.initStep == 2 {
 		sb.WriteString("│   Budget :: (selecting...)\n")
 	} else {
@@ -581,7 +631,7 @@ func (m *Model) updateThinkingSummary() {
 				modeStr = "AI Scan"
 			}
 		}
-		sb.WriteString(fmt.Sprintf("│  AI Mode :: %s\n", modeStr))
+		fmt.Fprintf(&sb, "│  AI Mode :: %s\n", modeStr)
 	} else if m.initStep == 3 {
 		sb.WriteString("│  AI Mode :: (selecting...)\n")
 	} else {
@@ -606,35 +656,15 @@ func getTheme() *huh.Theme {
 	return t
 }
 
-// isBlankProject checks if targetPath contains any actual source code files
-func isBlankProject(targetPath string) (bool, error) {
-	files, err := filepath.Glob(filepath.Join(targetPath, "*"))
-	if err != nil {
-		return false, err
-	}
 
-	noise := map[string]bool{
-		".git":        true,
-		".gitignore":  true,
-		"README.md":   true,
-		"readme.md":   true,
-		"LICENSE":     true,
-		".DS_Store":   true,
-		".harness":    true,
-	}
-
-	count := 0
-	for _, f := range files {
-		base := filepath.Base(f)
-		if !noise[base] {
-			count++
-		}
-	}
-
-	return count == 0, nil
-}
 
 // InitErr returns the error from background init execution, if any.
 func (m *Model) InitErr() error {
 	return m.initErr
+}
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+func stripAnsiCodes(s string) string {
+	return ansiRe.ReplaceAllString(s, "")
 }

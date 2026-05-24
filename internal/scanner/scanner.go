@@ -137,7 +137,7 @@ func scanDir(rootDir, currentDir string, depth, maxDepth int, gitignorePatterns 
 
 		if entry.IsDir() {
 			*dirCount++
-			sb.WriteString(fmt.Sprintf("%s|-- %s/\n", indent, name))
+			fmt.Fprintf(sb, "%s|-- %s/\n", indent, name)
 			err = scanDir(rootDir, fullPath, depth+1, maxDepth, gitignorePatterns, dirCount, sb)
 			if err != nil {
 				return err
@@ -145,7 +145,7 @@ func scanDir(rootDir, currentDir string, depth, maxDepth int, gitignorePatterns 
 		} else {
 			// Limit file output to depth 0 (project root) to avoid bloating the string tree.
 			if depth == 0 {
-				sb.WriteString(fmt.Sprintf("%s- %s\n", indent, name))
+				fmt.Fprintf(sb, "%s- %s\n", indent, name)
 			}
 		}
 	}

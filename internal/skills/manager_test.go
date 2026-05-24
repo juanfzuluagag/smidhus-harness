@@ -71,7 +71,7 @@ func TestAutoEquip(t *testing.T) {
 			name:        "fail-fast on the first invalid skill",
 			skills:      []string{"aws/cli-manager", "invalid-skill", "another-skill"},
 			wantErr:     true,
-			expectedErr: "Failed to equip skill 'invalid-skill'. Please verify the name in agents.yml",
+			expectedErr: "failed to equip skill 'invalid-skill': please verify the name in agents.yml",
 		},
 	}
 

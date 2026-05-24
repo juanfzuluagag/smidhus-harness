@@ -15,7 +15,7 @@ func AutoEquip(skills []string) error {
 	for _, skill := range skills {
 		cmd := execCommand("opencode", "plugin", skill)
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("Failed to equip skill '%s'. Please verify the name in agents.yml", skill)
+			return fmt.Errorf("failed to equip skill '%s': please verify the name in agents.yml", skill)
 		}
 	}
 	return nil

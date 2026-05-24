@@ -28,6 +28,9 @@ import (
 // Using a cancellable context (not a timeout) means the watchdog is the sole
 // authority for inactivity termination, keeping the logic in one place.
 func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Program) (string, error) {
+	if p != nil {
+		p.Send(ui.SetAgentMsg{Agent: "architect", Skill: ""})
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -51,7 +54,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Pro
 	cmd.Stdin = os.Stdin
 
 	// ── Spinner for Initial Wait (only in non-TUI mode) ──────────────────────
-	var stopSpinner func() = func() {}
+	stopSpinner := func() {}
 	if p == nil {
 		spinnerChan := make(chan struct{})
 		go func() {
@@ -105,6 +108,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Pro
 	}
 
 	printThinking := func(msg string) {
+		msg = strings.Replace(msg, "┌─ Thinking...", "┌─ [architect] Thinking...", 1)
 		if p != nil {
 			p.Send(ui.ThinkingMsg(msg + "\n"))
 		} else {
@@ -300,7 +304,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Pro
 
 	// ── Rate Limit Error ───────────────────────────────────────────────────────
 	if isRateLimit {
-		return stdoutBuf.String(), fmt.Errorf("API Quota/Rate Limit Exceeded. Process aborted to prevent hang.")
+		return stdoutBuf.String(), fmt.Errorf("api quota/rate limit exceeded: process aborted to prevent hang")
 	}
 
 	// ── Classified API Error ───────────────────────────────────────────────────
@@ -310,11 +314,7 @@ func runOpencodeWithFilter(ctx context.Context, model, prompt string, p *tea.Pro
 
 	// ── Inactivity Timeout ─────────────────────────────────────────────────────
 	if reason == "inactivity" {
-		return stdoutBuf.String(), fmt.Errorf(
-			"Inactivity timeout: No response/output received from the model for 2 minutes.\n" +
-				"  • The API might be overloaded or the task is too complex.\n" +
-				"  • Switch to a faster model or try again later.",
-		)
+		return stdoutBuf.String(), fmt.Errorf("inactivity timeout: no response/output received from the model for 2 minutes")
 	}
 
 	if runErr != nil {
@@ -383,17 +383,19 @@ func generateBlueprintAI(model, contextData, harnessDir string, p *tea.Program) 
 		mdStart := strings.Index(rawOutput, "# ")
 		if mdStart != -1 {
 			blueprintContent := rawOutput[mdStart:]
-			os.WriteFile(blueprintPath, []byte(blueprintContent), 0644)
+			if err := os.WriteFile(blueprintPath, []byte(blueprintContent), 0644); err != nil {
+				return fmt.Errorf("failed to write fallback blueprint: %w", err)
+			}
 		}
 	}
 
 	// ── Validation ────────────────────────────────────────────────────────────
 	info, statErr = os.Stat(blueprintPath)
 	if statErr != nil {
-		return fmt.Errorf("Validation failed: .harness/blueprint.md was not created by the AI")
+		return fmt.Errorf("validation failed: .harness/blueprint.md was not created by the AI")
 	}
 	if info.Size() < minBytes {
-		return fmt.Errorf("Validation failed: .harness/blueprint.md is empty or incomplete (%d bytes)", info.Size())
+		return fmt.Errorf("validation failed: .harness/blueprint.md is empty or incomplete (%d bytes)", info.Size())
 	}
 
 	ui.PrintSuccess(fmt.Sprintf(".harness/blueprint.md generated — %d bytes written in %s", info.Size(), elapsed.Round(time.Millisecond)))
@@ -516,12 +518,16 @@ func generateAgentsAI(model string, budget int, modelMap map[string][]string, ha
 			yamlContent := rawOutput[yamlStart:]
 			endIdx := strings.LastIndex(yamlContent, "model: \"")
 			if endIdx != -1 {
-				os.WriteFile(agentsYAMLPath, []byte(yamlContent), 0644)
+				if err := os.WriteFile(agentsYAMLPath, []byte(yamlContent), 0644); err != nil {
+					return fmt.Errorf("failed to write fallback agents.yml: %w", err)
+				}
 			}
 		} else if strings.Contains(rawOutput, "global_settings:") {
 			yamlStart = strings.Index(rawOutput, "global_settings:")
 			if yamlStart != -1 {
-				os.WriteFile(agentsYAMLPath, []byte(rawOutput[yamlStart:]), 0644)
+				if err := os.WriteFile(agentsYAMLPath, []byte(rawOutput[yamlStart:]), 0644); err != nil {
+					return fmt.Errorf("failed to write fallback agents.yml: %w", err)
+				}
 			}
 		}
 	}

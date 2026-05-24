@@ -62,7 +62,9 @@ func InitProject(targetPath string, runCmdCreator func(*tea.Program, chan struct
 	readmeContent := `# Project Specifications (Specs)
 
 Welcome to the specifications directory. The Architect agent will generate design files here. You can also manually add .md files to request new features.`
-	os.WriteFile(filepath.Join(harnessDir, "specs", "README.md"), []byte(readmeContent), 0644)
+	if err := os.WriteFile(filepath.Join(harnessDir, "specs", "README.md"), []byte(readmeContent), 0644); err != nil {
+		return fmt.Errorf("error creating specs README.md: %w", err)
+	}
 
 	templateContent := `# Specification Template (000_feature_name.md)
 
@@ -74,7 +76,9 @@ Welcome to the specifications directory. The Architect agent will generate desig
 
 ## 3. Technical Architecture & Constraints
 - **Files to Create/Modify**: ...`
-	os.WriteFile(filepath.Join(harnessDir, "specs", "template_spec.md"), []byte(templateContent), 0644)
+	if err := os.WriteFile(filepath.Join(harnessDir, "specs", "template_spec.md"), []byte(templateContent), 0644); err != nil {
+		return fmt.Errorf("error creating specs template_spec.md: %w", err)
+	}
 
 	// Fetch models before showing any prompts to avoid a mid-questionnaire
 	// failure leaving the user with no fallback option.

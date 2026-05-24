@@ -193,11 +193,26 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 	}
 
 	printThinking := func(msg string) {
+		var activeInfo string
+		if len(cfg.Skills) > 0 {
+			activeInfo = fmt.Sprintf("[%s ⚡ %s] ", agentName, strings.Join(cfg.Skills, ", "))
+		} else {
+			activeInfo = fmt.Sprintf("[%s] ", agentName)
+		}
+		msg = strings.Replace(msg, "┌─ Thinking...", "┌─ "+activeInfo+"Thinking...", 1)
 		if p != nil {
 			p.Send(ui.ThinkingMsg(msg + "\n"))
 		} else {
 			fmt.Print(msg + "\n")
 		}
+	}
+
+	var activeSkill string
+	if len(cfg.Skills) > 0 {
+		activeSkill = strings.Join(cfg.Skills, ", ")
+	}
+	if p != nil {
+		p.Send(ui.SetAgentMsg{Agent: agentName, Skill: activeSkill})
 	}
 
 	if len(cfg.Skills) > 0 {
@@ -455,7 +470,7 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 
 	// ── Rate Limit Error ───────────────────────────────────────────────────────
 	if isRateLimit {
-		return elapsed, fmt.Errorf("API Quota/Rate Limit Exceeded. Process aborted to prevent hang.")
+		return elapsed, fmt.Errorf("api quota/rate limit exceeded: process aborted to prevent hang")
 	}
 
 	// ── Classified API Error ───────────────────────────────────────────────────
@@ -465,17 +480,13 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 
 	// ── Inactivity Timeout ─────────────────────────────────────────────────────
 	if isInactivity {
-		return elapsed, fmt.Errorf(
-			"Inactivity timeout: No response/output received from the model for 2 minutes.\n" +
-				"  • The API might be overloaded or the task is too complex.\n" +
-				"  • Switch to a faster model or try again later.",
-		)
+		return elapsed, fmt.Errorf("inactivity timeout: no response/output received from the model for 2 minutes")
 	}
 
 	// ── Global Timeout ────────────────────────────────────────────────────────
 	if isGlobalTimeout {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Timed out after %s (limit: %s)\n", elapsed.Round(time.Second), timeout))
+		fmt.Fprintf(&sb, "Timed out after %s (limit: %s)\n", elapsed.Round(time.Second), timeout)
 		if len(errors) > 0 {
 			sb.WriteString("\nErrors detected during execution:\n  • ")
 			sb.WriteString(strings.Join(errors, "\n  • "))
@@ -518,10 +529,7 @@ func RunAgent(agentName string, cfg config.AgentConfig, agentContent string, tim
 
 	// ── Exit 0 but with suspicious output ─────────────────────────────────────
 	if len(errors) > 0 {
-		return elapsed, fmt.Errorf(
-			"completed with warnings after %s:\n  • %s\n\nOutput may be incomplete — review and re-run if needed.",
-			elapsed.Round(time.Second), strings.Join(errors, "\n  • "),
-		)
+		return elapsed, fmt.Errorf("completed with warnings after %s: %s (output may be incomplete)", elapsed.Round(time.Second), strings.Join(errors, "; "))
 	}
 
 	return elapsed, nil

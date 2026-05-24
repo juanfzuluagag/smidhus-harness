@@ -132,7 +132,9 @@ func TestRunAgentWithMockBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	// Write mock opencode source code
 	mockSrc := `package main
@@ -193,8 +195,14 @@ func main() {
 
 	// Prepend temp directory to PATH so Go exec finds our mock opencode binary first
 	origPath := os.Getenv("PATH")
-	os.Setenv("PATH", tmpDir+string(os.PathListSeparator)+origPath)
-	defer os.Setenv("PATH", origPath)
+	if err := os.Setenv("PATH", tmpDir+string(os.PathListSeparator)+origPath); err != nil {
+		t.Fatalf("failed to set PATH: %v", err)
+	}
+	defer func() {
+		if err := os.Setenv("PATH", origPath); err != nil {
+			t.Errorf("failed to restore PATH: %v", err)
+		}
+	}()
 
 	cfg := config.AgentConfig{
 		Model: "mock-model",
@@ -215,7 +223,7 @@ func main() {
 		if err == nil {
 			t.Fatal("expected execution failure, got nil")
 		}
-		if !strings.Contains(err.Error(), "API Quota/Rate Limit Exceeded") {
+		if !strings.Contains(strings.ToLower(err.Error()), "rate limit exceeded") {
 			t.Errorf("expected error message to contain rate limit, got: %v", err)
 		}
 	})
