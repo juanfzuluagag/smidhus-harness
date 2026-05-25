@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -141,6 +142,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
+		terminalWidth.Store(int32(msg.Width))
 
 		// Static height overhead for borders, titles, spacers, footer, and the 5-line banner:
 		// Header (5 lines) + spacer (1 line) + thinkTitle (1 line) + thinkBox borders (2 lines) 
@@ -184,12 +186,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logViewport.Height = logHeight
 		}
 
-		m.thinkingViewport.SetContent(m.thinkingContent.String())
+		m.thinkingViewport.SetContent(m.wrapContent(m.thinkingContent.String(), m.thinkingViewport.Width))
 		if m.form != nil {
 			m.form.WithHeight(m.logViewport.Height)
 			m.logViewport.SetContent(m.form.View())
 		} else {
-			m.logViewport.SetContent(m.logContent.String())
+			m.logViewport.SetContent(m.wrapContent(m.logContent.String(), m.logViewport.Width))
 		}
 	}
 
@@ -261,7 +263,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ThinkingMsg:
 		m.thinkingContent.WriteString(string(msg))
-		m.thinkingViewport.SetContent(m.thinkingContent.String())
+		m.thinkingViewport.SetContent(m.wrapContent(m.thinkingContent.String(), m.thinkingViewport.Width))
 		m.thinkingViewport.GotoBottom()
 
 		// Extract agent and skill from the header if present
@@ -288,7 +290,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LogMsg:
 		m.logContent.WriteString(string(msg))
-		m.logViewport.SetContent(m.logContent.String())
+		m.logViewport.SetContent(m.wrapContent(m.logContent.String(), m.logViewport.Width))
 		m.logViewport.GotoBottom()
 
 	case FinishedMsg:
@@ -300,7 +302,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RunStartedMsg:
 		m.logContent.WriteString("\n" + PrimaryText.Render("[>] Starting Smidhus Harness execution loop...") + "\n")
-		m.logViewport.SetContent(m.logContent.String())
+		m.logViewport.SetContent(m.wrapContent(m.logContent.String(), m.logViewport.Width))
 		m.logViewport.GotoBottom()
 
 	case initCompletedMsg:
@@ -312,13 +314,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ActiveSkill = ""
 
 		if msg.err != nil {
+			wrapW := m.logViewport.Width - 10
+			if wrapW < 20 {
+				wrapW = 20
+			}
+			wrappedErr := WrapText(msg.err.Error(), wrapW)
 			errBox := lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color(Error)).
 				Padding(1, 3).
 				Render(
 					ErrorText.Render("[x] Initialization failed") + "\n\n" +
-						BaseText.Render(msg.err.Error()) + "\n\n" +
+						BaseText.Render(wrappedErr) + "\n\n" +
 						MutedText.Render("Press q or ctrl+c to exit."),
 				)
 			m.logContent.WriteString("\n" + errBox + "\n")
@@ -327,7 +334,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			successHeader := SuccessText.Render("[+] Success :: Smidhus Harness initialized successfully!")
 			m.logContent.WriteString("\n" + successHeader + "\n\n" + guideStyle.Render(msg.guide) + "\n\n" + MutedText.Render("Press q or ctrl+c to exit.") + "\n")
 		}
-		m.logViewport.SetContent(m.logContent.String())
+		m.logViewport.SetContent(m.wrapContent(m.logContent.String(), m.logViewport.Width))
 		m.logViewport.GotoBottom()
 	}
 
@@ -658,7 +665,7 @@ func (m *Model) updateThinkingSummary() {
 
 	m.thinkingContent.Reset()
 	m.thinkingContent.WriteString(sb.String())
-	m.thinkingViewport.SetContent(m.thinkingContent.String())
+	m.thinkingViewport.SetContent(m.wrapContent(m.thinkingContent.String(), m.thinkingViewport.Width))
 }
 
 func getTheme() *huh.Theme {
@@ -679,8 +686,159 @@ func (m *Model) InitErr() error {
 	return m.initErr
 }
 
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+var (
+	ansiRe        = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	terminalWidth atomic.Int32
+)
 
 func stripAnsiCodes(s string) string {
 	return ansiRe.ReplaceAllString(s, "")
+}
+
+// GetTerminalWidth returns the thread-safe global terminal width.
+func GetTerminalWidth() int {
+	w := terminalWidth.Load()
+	if w <= 0 {
+		return 80
+	}
+	return int(w)
+}
+
+// WrapText wraps a single line or multiline string to the specified width,
+// preserving ANSI formatting, indents/bullet-points, and special thinking/border lines.
+func WrapText(str string, width int) string {
+	return wrapLineWithIndent(str, width)
+}
+
+func (m *Model) wrapContent(content string, width int) string {
+	if width <= 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	var wrappedLines []string
+	for _, line := range lines {
+		wrappedLines = append(wrappedLines, wrapLineWithIndent(line, width))
+	}
+	return strings.Join(wrappedLines, "\n")
+}
+
+func wrapLineWithIndent(line string, width int) string {
+	plain := stripAnsiCodes(line)
+	if len(plain) <= width {
+		return line
+	}
+
+	// Do not wrap border divider lines
+	if strings.Contains(plain, "─────") {
+		return line
+	}
+
+	// 1. Check for thinking prefix "│ "
+	if strings.HasPrefix(plain, "│ ") {
+		idx := strings.Index(line, "│ ")
+		if idx != -1 {
+			prefix := line[:idx+len("│ ")]
+			rest := line[idx+len("│ "):]
+			wrappedRest := wrapText(rest, width-2)
+			subLines := strings.Split(wrappedRest, "\n")
+			for i, subLine := range subLines {
+				subLines[i] = prefix + strings.TrimRight(subLine, " ")
+			}
+			return strings.Join(subLines, "\n")
+		}
+	}
+
+	// 2. Check for bullet list indentation like "  • " or "    • " or standard spaces "    "
+	firstNonSpacePlainIdx := -1
+	for idx, r := range plain {
+		if r != ' ' && r != '\t' {
+			firstNonSpacePlainIdx = idx
+			break
+		}
+	}
+
+	if firstNonSpacePlainIdx > 0 {
+		bulletLen := 0
+		plainRunes := []rune(plain[firstNonSpacePlainIdx:])
+		if len(plainRunes) > 0 {
+			firstRune := plainRunes[0]
+			if firstRune == '•' || firstRune == '-' || firstRune == '*' {
+				if len(plainRunes) > 1 && plainRunes[1] == ' ' {
+					bulletLen = len(string(firstRune)) + 1
+				} else {
+					bulletLen = len(string(firstRune))
+				}
+			}
+		}
+
+		plainPrefixLen := firstNonSpacePlainIdx + bulletLen
+		if plainPrefixLen < width/2 {
+			styledPrefix, styledRest := splitStyledStringAtPlainIdx(line, plainPrefixLen)
+			wrappedRest := wrapText(styledRest, width-plainPrefixLen)
+			subLines := strings.Split(wrappedRest, "\n")
+			for i, subLine := range subLines {
+				if i == 0 {
+					subLines[i] = styledPrefix + strings.TrimRight(subLine, " ")
+				} else {
+					visualIndent := strings.Repeat(" ", plainPrefixLen)
+					subLines[i] = visualIndent + strings.TrimRight(subLine, " ")
+				}
+			}
+			return strings.Join(subLines, "\n")
+		}
+	}
+
+	wrapped := wrapText(line, width)
+	subLines := strings.Split(wrapped, "\n")
+	for i, subLine := range subLines {
+		subLines[i] = strings.TrimRight(subLine, " ")
+	}
+	return strings.Join(subLines, "\n")
+}
+
+func wrapText(str string, width int) string {
+	if width <= 0 {
+		return str
+	}
+	return lipgloss.NewStyle().Width(width).Render(str)
+}
+
+func splitStyledStringAtPlainIdx(s string, plainIdx int) (string, string) {
+	var prefix, rest strings.Builder
+	runes := []rune(s)
+	inAnsi := false
+	plainCount := 0
+
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\x1b' {
+			inAnsi = true
+			if plainCount < plainIdx {
+				prefix.WriteRune(r)
+			} else {
+				rest.WriteRune(r)
+			}
+			continue
+		}
+		if inAnsi {
+			if plainCount < plainIdx {
+				prefix.WriteRune(r)
+			} else {
+				rest.WriteRune(r)
+			}
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inAnsi = false
+			}
+			continue
+		}
+
+		if plainCount < plainIdx {
+			prefix.WriteRune(r)
+			plainCount++
+		} else {
+			rest.WriteRune(r)
+		}
+	}
+
+	return prefix.String(), rest.String()
 }

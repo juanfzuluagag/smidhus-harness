@@ -157,6 +157,9 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 			if projectState.Tasks[i].Status != "done" {
 				activeTask = &projectState.Tasks[i]
 				break
+			} else {
+				// Safety check: archive any leftover spec files if a task is marked done
+				archiveTaskSpecs(projectState.Tasks[i].ID, p)
 			}
 		}
 
@@ -307,13 +310,18 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 		if runErr != nil {
 			// State is intentionally NOT advanced on failure so the user can fix the
 			// underlying issue (e.g. swap models, edit the prompt) and press Enter to retry.
+			wrapW := ui.GetTerminalWidth() - 10
+			if wrapW < 20 {
+				wrapW = 20
+			}
+			wrappedErr := ui.WrapText(runErr.Error(), wrapW)
 			errBox := lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color(ui.Error)).
 				Padding(1, 3).
 				Render(
 					ui.ErrorText.Render("[x] Agent failed: "+targetAgent) + "\n\n" +
-						ui.BaseText.Render(runErr.Error()) + "\n\n" +
+						ui.BaseText.Render(wrappedErr) + "\n\n" +
 						ui.MutedText.Render("State was NOT advanced. Press Enter to retry, or q to abort."),
 				)
 			
@@ -385,4 +393,53 @@ func resolveAgentContent(agentName string) ([]byte, error) {
 		return nil, fmt.Errorf("no agent prompt found for '%s' — add .harness/agents/%s.md or an embedded template", agentName, agentName)
 	}
 	return data, nil
+}
+
+// archiveTaskSpecs cleans up and archives specs for completed tasks (safety net for manual bypasses).
+func archiveTaskSpecs(taskID string, p *tea.Program) {
+	specsDir := filepath.Join(".harness", "specs")
+	archiveDir := filepath.Join(specsDir, "archive")
+
+	entries, err := os.ReadDir(specsDir)
+	if err != nil {
+		return // specs directory might not exist yet
+	}
+
+	var filesToMove []string
+	prefix := taskID + "_"
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) {
+			filesToMove = append(filesToMove, entry.Name())
+		}
+	}
+
+	if len(filesToMove) == 0 {
+		return
+	}
+
+	// Create archive directory if needed
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return
+	}
+
+	logMsg := fmt.Sprintf(" !  [%s] Unarchived specs detected. Moving to specs/archive...", taskID)
+	if p != nil {
+		p.Send(ui.LogMsg(logMsg + "\n"))
+	} else {
+		fmt.Println(logMsg)
+	}
+
+	for _, filename := range filesToMove {
+		src := filepath.Join(specsDir, filename)
+		dst := filepath.Join(archiveDir, filename)
+		if err := os.Rename(src, dst); err != nil {
+			// Fallback: Copy and delete
+			data, err := os.ReadFile(src)
+			if err == nil {
+				if os.WriteFile(dst, data, 0644) == nil {
+					_ = os.Remove(src)
+				}
+			}
+		}
+	}
 }
