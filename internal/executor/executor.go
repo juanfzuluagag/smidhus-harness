@@ -175,8 +175,8 @@ func classifyError(line string) (string, bool) {
 		return "API Call Error. Process aborted to prevent hang.", true
 	}
 
-	// Fallback error classification
-	return "API Call Error. Process aborted to prevent hang.", true
+	// Fallback error classification: do not treat as fatal API/harness error
+	return "", false
 }
 
 // RunAgent invokes OpenCode with the correct model and agent prompt.

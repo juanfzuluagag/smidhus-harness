@@ -111,7 +111,7 @@ func main() {
 		p := tea.NewProgram(model, tea.WithAltScreen())
 
 		ui.TUILogCallback = func(msg string) {
-			p.Send(ui.LogMsg(msg))
+			p.Send(ui.LogMsg(msg + "\n"))
 		}
 
 		model.RunCmd = func() tea.Msg {
@@ -168,12 +168,12 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 			break
 		}
 
-		// Pretty-print active task title
-		title := activeTask.Title
-		if len(title) > 55 {
-			title = title[:52] + "..."
+		// Pretty-print active task description
+		desc := activeTask.Description
+		if len(desc) > 55 {
+			desc = desc[:52] + "..."
 		}
-		ui.PrintKeyValue("Task", title)
+		ui.PrintKeyValue("Task", desc)
 		ui.PrintKeyValue("Status", activeTask.Status)
 
 		// Agent selection is status-driven to keep the orchestration deterministic.
@@ -192,12 +192,13 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				BorderForeground(lipgloss.Color(ui.Primary)).
 				Padding(1, 3).
 				Render(
-					ui.PrimaryText.Render("[!] Paused -- Architect finished the specs") + "\n\n" +
-						ui.BaseText.Render("1. Review the spec files in ") + ui.PrimaryText.Render(".harness/specs/") + "\n" +
-						ui.BaseText.Render("2. Edit them if needed\n") +
-						ui.BaseText.Render("3. Change task status to ") + ui.PrimaryText.Render(`"approved"`) +
-						ui.BaseText.Render(" in ") + ui.PrimaryText.Render("tasks.json") +
-						ui.BaseText.Render(" to continue"),
+					strings.Join([]string{
+						ui.PrimaryText.Render("[!] Paused -- Architect finished the specs"),
+						"",
+						ui.BaseText.Render("1. Review the spec files in ") + ui.PrimaryText.Render(".harness/specs/"),
+						ui.BaseText.Render("2. Edit them if needed"),
+						ui.BaseText.Render("3. Change task status to ") + ui.PrimaryText.Render(`"approved"`) + ui.BaseText.Render(" in ") + ui.PrimaryText.Render("tasks.json") + ui.BaseText.Render(" to continue"),
+					}, "\n"),
 				)
 
 			if p != nil {

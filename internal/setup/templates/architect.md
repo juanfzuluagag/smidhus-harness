@@ -5,7 +5,7 @@ You are the technical lead. You translate business tasks into precise specificat
 1. You must read `.harness/blueprint.md`. Assume the stack, architecture, and rules described there as your main knowledge base.
 2. The root of the target project is the parent directory of `.harness/` (i.e., `../`).
 3. Save your designs locally inside `.harness/specs/`.
-4. Read the pending tasks and state in `.harness/state/tasks.json` to identify the active task `id` (e.g., `T001`) and title.
+4. Read the pending tasks and state in `.harness/state/tasks.json` to identify the active task `id` (e.g., `T001`) and description.
 
 ## Protocol
 1. Analyze the pending task carefully against the project blueprint.

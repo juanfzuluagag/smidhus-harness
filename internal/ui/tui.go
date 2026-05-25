@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,6 +39,14 @@ type FinishedMsg struct{}
 
 // RunStartedMsg represents the message sent when the orchestrator execution loop starts.
 type RunStartedMsg struct{}
+
+type tickMsg time.Time
+
+func tick() tea.Cmd {
+	return tea.Tick(300*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
 
 // Model defines the full-screen Bubble Tea TUI state.
 type Model struct {
@@ -87,6 +96,7 @@ type Model struct {
 	// Active agent and skill tracking
 	ActiveAgent string
 	ActiveSkill string
+	tickCount   int
 }
 
 // NewTUIModel creates and initializes a Model with the retry signaling channel.
@@ -116,9 +126,9 @@ func (m *Model) Init() tea.Cmd {
 	if m.isInit {
 		m.initStep = 0
 		m.updateThinkingSummary()
-		return m.startInitStep()
+		return tea.Batch(m.startInitStep(), tick())
 	}
-	return nil
+	return tick()
 }
 
 // Update handles state transitions and window resizing.
@@ -245,6 +255,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
+	case tickMsg:
+		m.tickCount++
+		return m, tick()
+
 	case ThinkingMsg:
 		m.thinkingContent.WriteString(string(msg))
 		m.thinkingViewport.SetContent(m.thinkingContent.String())
@@ -359,10 +373,12 @@ func (m *Model) View() string {
 	} else {
 		var activeText string
 		if m.ActiveAgent != "" {
+			dots := []string{"   ", ".  ", ".. ", "..."}
+			activeDots := dots[m.tickCount%4]
 			if m.ActiveSkill != "" {
-				activeText = fmt.Sprintf("Active: %s ⚡ %s", m.ActiveAgent, m.ActiveSkill)
+				activeText = fmt.Sprintf("Active: %s ⚡ %s%s", m.ActiveAgent, m.ActiveSkill, activeDots)
 			} else {
-				activeText = fmt.Sprintf("Active: %s", m.ActiveAgent)
+				activeText = fmt.Sprintf("Active: %s%s", m.ActiveAgent, activeDots)
 			}
 		} else {
 			activeText = "Idle"

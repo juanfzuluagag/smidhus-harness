@@ -119,7 +119,7 @@ During this step, the CLI will:
 4. Seed the initial state machine files in `.harness/state/`.
 
 ### Step 2: Configure Agents and Models
-Open `.harness/agents.yml` to define which model runs each agent. Pair complex roles with reasoning engines and standard roles with fast models:
+Open `.harness/agents.yml` to define which model runs each agent and equip specialized skills. Pair complex roles with reasoning engines and standard roles with fast models:
 
 ```yaml
 global_settings:
@@ -131,15 +131,31 @@ agents:
     model: "deepseek-v4-pro"
   builder:
     model: "nvidia/qwen3-next-80b-a3b-thinking"
+    skills:
+      - "vercel-labs/agent-skills/vercel-react-best-practices"
   gatekeeper:
     model: "google/gemini-2.5-pro"
   cloud:
     model: "google/gemini-2.5-flash"
   designer:
     model: "google/gemini-2.5-flash" # Vision support is critical here
+    skills:
+      - "anthropics/skills/frontend-design"
   documenter:
     model: "google/gemini-2.5-flash"
 ```
+
+#### Equipping Agent Skills
+
+Harness supports automatic global provisioning of Agent Skills. When you configure a skill under an agent's `skills` block in `agents.yml`, the orchestrator automatically checks if it is installed locally or globally. If missing, it uses `npx skills` to download and install it globally.
+
+To configure a skill, find it on [skills.sh](https://www.skills.sh) and copy either:
+1. **The URL Path (Slug):** The path of the page URL (`owner/repository-name/skill-name`).
+   *Example:* `"vercel-labs/agent-skills/vercel-react-best-practices"`
+2. **The GitHub URL:** The direct folder path on GitHub.
+   *Example:* `"https://github.com/vercel-labs/agent-skills/vercel-react-best-practices"`
+
+Both formats are parsed and resolved automatically.
 
 ### Step 3: Define Tasks
 Define your development roadmap in `.harness/state/tasks.json`. Add tasks following this structure:
@@ -150,7 +166,7 @@ Define your development roadmap in `.harness/state/tasks.json`. Add tasks follow
   "tasks": [
     {
       "id": "T001",
-      "title": "Configure authentication middleware with JWT token validation",
+      "description": "Configure authentication middleware with JWT token validation",
       "status": "pending"
     }
   ]

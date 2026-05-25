@@ -538,9 +538,9 @@ func generateAgentsAI(model string, budget int, modelMap map[string][]string, ha
 
 func writeTasksJSON(harnessDir, projName string) error {
 	type task struct {
-		ID     string `json:"id"`
-		Title  string `json:"title"`
-		Status string `json:"status"`
+		ID          string `json:"id"`
+		Description string `json:"description"`
+		Status      string `json:"status"`
 	}
 	type projectState struct {
 		Project string `json:"project"`
@@ -549,9 +549,9 @@ func writeTasksJSON(harnessDir, projName string) error {
 	data, err := json.MarshalIndent(projectState{
 		Project: projName,
 		Tasks: []task{{
-			ID:     "T001",
-			Title:  "Scaffold the base project structure and configure core dependencies according to the Blueprint",
-			Status: "pending",
+			ID:          "T001",
+			Description: "Scaffold the base project structure and configure core dependencies according to the Blueprint",
+			Status:      "pending",
 		}},
 	}, "", "  ")
 	if err != nil {
