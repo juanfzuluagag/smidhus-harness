@@ -15,6 +15,8 @@ const DefaultTimeoutSec = 900
 // may consume. 0 means "no explicit budget" (model decides).
 const DefaultThinkingBudgetMs = 0
 
+const DefaultMaxRetries = 2
+
 // GlobalSettings holds project-wide harness settings from agents.yml.
 type GlobalSettings struct {
 	// TimeoutSec is the maximum number of seconds to wait for any single
@@ -24,6 +26,9 @@ type GlobalSettings struct {
 	// ThinkingBudgetMs is an optional budget (in milliseconds) for the model's
 	// extended-thinking phase. Set to 0 to disable the explicit budget.
 	ThinkingBudgetMs int `yaml:"thinking_budget_ms"`
+
+	// MaxRetries is the maximum number of times to retry a failed agent task.
+	MaxRetries *int `yaml:"max_retries,omitempty"`
 }
 
 // Timeout returns the GlobalSettings timeout as a time.Duration.
@@ -34,6 +39,14 @@ func (g GlobalSettings) Timeout() time.Duration {
 		secs = DefaultTimeoutSec
 	}
 	return time.Duration(secs) * time.Second
+}
+
+// MaxRetriesVal returns the max retries from settings, falling back to DefaultMaxRetries.
+func (g GlobalSettings) MaxRetriesVal() int {
+	if g.MaxRetries == nil {
+		return DefaultMaxRetries
+	}
+	return *g.MaxRetries
 }
 
 // AgentConfig holds per-agent settings.

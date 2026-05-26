@@ -171,6 +171,51 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 			break
 		}
 
+		// Startup failure check:
+		maxRetries := cfg.GlobalSettings.MaxRetriesVal()
+		if activeTask.FailedAttempts > maxRetries {
+			wrapW := ui.GetTerminalWidth() - 10
+			if wrapW < 20 {
+				wrapW = 20
+			}
+			wrappedErr := ui.WrapText(activeTask.Error, wrapW)
+			errBox := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(ui.Error)).
+				Padding(1, 3).
+				Render(
+					ui.ErrorText.Render(fmt.Sprintf("[x] Task %s previously failed (Attempts: %d/%d)", activeTask.ID, activeTask.FailedAttempts, maxRetries)) + "\n\n" +
+						ui.BaseText.Render(wrappedErr) + "\n\n" +
+						ui.MutedText.Render("Press Enter to clear error and retry, or q to abort."),
+				)
+			
+			if p != nil {
+				p.Send(ui.SetAgentMsg{Agent: "", Skill: ""})
+				p.Send(ui.LogMsg("\n" + errBox + "\n"))
+				
+				// Drain any old retry signal
+				select {
+				case <-retryChan:
+				default:
+				}
+				// Wait for TUI retry command (Enter key)
+				<-retryChan
+			} else {
+				fmt.Println("\n" + errBox)
+				_, _ = fmt.Scanln()
+			}
+
+			// Clear the error and attempts
+			activeTask.FailedAttempts = 0
+			activeTask.Error = ""
+			if err := state.SaveState(tasksPath, projectState); err != nil {
+				ui.PrintError(fmt.Sprintf("Error saving state: %v", err))
+				os.Exit(1)
+			}
+			ui.PrintKeyValue("Reset", "Error and attempts cleared — resuming...")
+			continue // restart loop to process this task now
+		}
+
 		// Pretty-print active task description
 		desc := activeTask.Description
 		if len(desc) > 55 {
@@ -308,8 +353,28 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 		)
 
 		if runErr != nil {
-			// State is intentionally NOT advanced on failure so the user can fix the
-			// underlying issue (e.g. swap models, edit the prompt) and press Enter to retry.
+			activeTask.FailedAttempts++
+			activeTask.Error = runErr.Error()
+
+			// Save state immediately so failures are persistent
+			if err := state.SaveState(tasksPath, projectState); err != nil {
+				ui.PrintError(fmt.Sprintf("Error saving state: %v", err))
+				os.Exit(1)
+			}
+
+			maxRetries := cfg.GlobalSettings.MaxRetriesVal()
+			if activeTask.FailedAttempts <= maxRetries {
+				warnMsg := fmt.Sprintf("\n%s Agent '%s' failed (Attempt %d/%d). Retrying in 5 seconds...\n", 
+					ui.WarningText.Render("[!]"), targetAgent, activeTask.FailedAttempts, maxRetries)
+				if p != nil {
+					p.Send(ui.LogMsg(warnMsg))
+				} else {
+					fmt.Print(warnMsg)
+				}
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
 			wrapW := ui.GetTerminalWidth() - 10
 			if wrapW < 20 {
 				wrapW = 20
@@ -320,7 +385,7 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				BorderForeground(lipgloss.Color(ui.Error)).
 				Padding(1, 3).
 				Render(
-					ui.ErrorText.Render("[x] Agent failed: "+targetAgent) + "\n\n" +
+					ui.ErrorText.Render(fmt.Sprintf("[x] Agent failed: %s (Attempts: %d/%d)", targetAgent, activeTask.FailedAttempts, maxRetries)) + "\n\n" +
 						ui.BaseText.Render(wrappedErr) + "\n\n" +
 						ui.MutedText.Render("State was NOT advanced. Press Enter to retry, or q to abort."),
 				)
@@ -340,10 +405,22 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 				fmt.Println("\n" + errBox)
 				_, _ = fmt.Scanln()
 			}
+
+			// Clear errors to retry
+			activeTask.FailedAttempts = 0
+			activeTask.Error = ""
+			if err := state.SaveState(tasksPath, projectState); err != nil {
+				ui.PrintError(fmt.Sprintf("Error saving state: %v", err))
+				os.Exit(1)
+			}
 			continue
 		}
 
 		ui.PrintKeyValue("Result", ui.SuccessText.Render(fmt.Sprintf("[+] Done (%s)", elapsed.Round(time.Millisecond))))
+
+		// Reset error state on success
+		activeTask.FailedAttempts = 0
+		activeTask.Error = ""
 
 		// State transitions are intentionally centralized here, not inside agents.
 		switch activeTask.Status {
@@ -361,6 +438,9 @@ func runLoop(p *tea.Program, retryChan chan struct{}) {
 
 		case "documenting":
 			activeTask.Status = "done"
+			activeTask.AgentIndex = 0
+			activeTask.FailedAttempts = 0
+			activeTask.Error = ""
 		}
 
 		// Persist immediately so a crash never rolls back a completed step.

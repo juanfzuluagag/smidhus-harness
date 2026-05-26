@@ -38,8 +38,6 @@ func CheckOpenCode() error {
 // targetPath, generating .harness/blueprint.md, agents.yml, and tasks.json.
 // The function is intentionally sequential — each phase feeds the next.
 func InitProject(targetPath string, runCmdCreator func(*tea.Program, chan struct{}) tea.Cmd) error {
-	ui.PrintBanner()
-
 	harnessDir := filepath.Join(targetPath, ".harness")
 
 	// Perform shallow scan on target project path

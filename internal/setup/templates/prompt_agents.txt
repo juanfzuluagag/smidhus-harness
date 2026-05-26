@@ -18,6 +18,8 @@ global_settings:
   timeout: 900
   # Thinking budget in milliseconds (0 = no explicit limit, model decides).
   thinking_budget_ms: {{.Budget}}
+  # Maximum automatic retries for failed agent tasks (default: 2)
+  max_retries: 2
 
 agents:
   # ARCHITECT: Analyzes requirements, designs the system, and dictates technical rules.

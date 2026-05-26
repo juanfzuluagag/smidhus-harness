@@ -11,6 +11,8 @@ type Task struct {
 	Status         string   `json:"status"`
 	RequiredAgents []string `json:"required_agents,omitempty"`
 	AgentIndex     int      `json:"agent_index,omitempty"`
+	Error          string   `json:"error,omitempty"`
+	FailedAttempts int      `json:"failed_attempts,omitempty"`
 }
 
 type ProjectState struct {

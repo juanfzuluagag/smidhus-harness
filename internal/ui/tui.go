@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 // LogMsg represents a log message to append to the log viewport.
@@ -197,8 +198,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// 2. If form is active, forward the message to it
 	if m.form != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "ctrl+c" {
-			return m, tea.Quit
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			if keyMsg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			if keyMsg.String() == "esc" && m.isInit && m.initStep > 0 && m.initStep < 5 {
+				m.initStep--
+
+				// Reset child choices when going back to ensure data integrity
+				switch m.initStep {
+				case 0:
+					m.selectedModel = ""
+					m.budget = 0
+					m.aiMode = false
+				case 1:
+					m.budget = 0
+					m.aiMode = false
+				case 2:
+					m.aiMode = false
+				case 3:
+					m.qName = ""
+					m.qStack = ""
+					m.qDepMgr = ""
+					m.qArch = ""
+					m.qSecurity = ""
+					m.qUiUx = ""
+				}
+
+				cmd := m.startInitStep()
+				m.updateThinkingSummary()
+				return m, cmd
+			}
 		}
 
 		newForm, cmd := m.form.Update(msg)
@@ -460,7 +490,11 @@ func (m *Model) View() string {
 	
 	footerText := " [Tab] Switch Focus  ·  [↑/↓] Scroll Focused Box  ·  [q] Quit "
 	if m.isInit && m.initStep < 5 {
-		footerText = " [Tab/Shift+Tab] Navigate  ·  [Enter] Next/Confirm  ·  [ctrl+c] Quit "
+		if m.initStep > 0 {
+			footerText = " [Tab/Shift+Tab] Navigate  ·  [Enter] Next/Confirm  ·  [esc] Back  ·  [ctrl+c] Quit "
+		} else {
+			footerText = " [Tab/Shift+Tab] Navigate  ·  [Enter] Next/Confirm  ·  [ctrl+c] Quit "
+		}
 	}
 	if m.isFinished {
 		footerText += "  ·  [r] Run (Start Forging)"
@@ -800,7 +834,7 @@ func wrapText(str string, width int) string {
 	if width <= 0 {
 		return str
 	}
-	return lipgloss.NewStyle().Width(width).Render(str)
+	return wordwrap.String(str, width)
 }
 
 func splitStyledStringAtPlainIdx(s string, plainIdx int) (string, string) {
